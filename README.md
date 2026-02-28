@@ -25,3 +25,24 @@ Record meetings, lectures, or live discussions and automatically generate notes 
 - Electron UI (Start / Stop / Status)
 - Show transcript in app
 - Note summarization
+
+## Prerequisites
+- Node.js (v18+ recommended)
+- Python (3.8+)
+- FFmpeg installed and available in PATH
+- faster-whisper Python package
+
+**Installation**
+- Install FFmpeg:
+- Windows: Download from ffmpeg.org or use winget install ffmpeg
+- macOS: brew install ffmpeg
+- Linux: sudo apt install ffmpeg (Debian/Ubuntu)
+- Install Python dependencies:
+   - pip install faster-whisper
+- Install Electron dependencies:
+  - cd electron
+  - npm install
+- Running the Application
+  - cd electron
+  - npm start
+
