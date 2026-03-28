@@ -1,14 +1,11 @@
 console.log("record.js started");
-
-const { rejects } = require("assert");
 const { spawn } = require("child_process");
-const { promises } = require("dns");
-const { resolve } = require("path");
 
 const MICROPHONE_NAME = "Microphone Array (Realtek(R) Audio)";
 const SYSTEM_AUDIO = "Stereo Mix (Realtek(R) Audio)";
 
 let ffmpegProcess = null;
+let exitHandler = null;
 
 function startRecording() {
     return new Promise((resolve, reject) => {
@@ -64,10 +61,10 @@ function stopRecording() {
         }
 
         console.log("Stopping recording...");
-        ffmpegProcess.stdin.write("q");
+        // ffmpegProcess.stdin.write("q"); have it below now 
 
         // Waits for the process to exit completely
-        ffmpegProcess.on('exit', (code) => {
+        ffmpegProcess.once('exit', (code) => {
             console.log("FFmpeg process exited with code:", code);
             ffmpegProcess = null;
             resolve({ success: true });
@@ -78,20 +75,19 @@ function stopRecording() {
             reject(err);
         });
 
-        // Timeout after 5 seconds just in case
+        ffmpegProcess.stdin.write("q");// sends quit command 
+
+        // time out after 5s just in case 
         setTimeout(() => {
             if (ffmpegProcess) {
+                console.log("Force killing ffmpeg due to timeout");
                 ffmpegProcess.kill();
                 ffmpegProcess = null;
-                console.log("FFmpeg process killed due to timeout");
+                exitHandler = null;
+                resolve({ success: true });
             }
-            resolve({ success: true });
         }, 5000);
     });
 }
 
-// process.on("SIGINT", () => {
-//     stopRecording();
-//     process.exit();
-// });
 module.exports = { startRecording, stopRecording }

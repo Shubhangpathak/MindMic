@@ -17,39 +17,71 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "index.html"));
 
     // Opens DevTools for debugging will diable in production
+    // win.webContents.openDevTools(); for developer option in application
     win.webContents.openDevTools();
+
+    return win;
+}
+
+function startAudioServer() {
+    if (audioServer) return;
+
+    audioServer = http.createServer((req, res) => {
+        if (req.url === '/audio') {
+            const audioPath = path.join(process.cwd(), "output.wav");
+
+            if (fs.existsSync(audioPath)) {
+                const stat = fs.statSync(audioPath);
+                res.writeHead(200, {
+                    'Content-Type': 'audio/wav',
+                    'Content-Length': stat.size
+                });
+                fs.createReadStream(audioPath).pipe(res);
+            } else {
+                res.writeHead(404);
+                res.end('Audio file not found');
+            }
+        } else {
+            res.writeHead(404);
+            res.end('Not found');
+        }
+    });
+
+    audioServer.listen(3333, 'localhost', () => {
+        console.log('Audio server started on http://localhost:3333');
+    });
 }
 
 // Register custom protocol before app is ready
-protocol.registerSchemesAsPrivileged([
-    {
-        scheme: 'audio',
-        privileges: {
-            secure: true,
-            standard: true,
-            supportFetchAPI: true,
-            corsEnabled: true
-        }
-    }
-]);
+// protocol.registerSchemesAsPrivileged([
+//     {
+//         scheme: 'audio',
+//         privileges: {
+//             secure: true,
+//             standard: true,
+//             supportFetchAPI: true,
+//             corsEnabled: true
+//         }
+//     }
+// ]);
 
-app.whenReady().then(() => {
-    // Register the audio protocol handler
-    protocol.handle('audio', (request) => {
-        const url = new URL(request.url);
-        const filePath = decodeURIComponent(url.pathname);
+// app.whenReady().then(() => {
+//     // Register the audio protocol handler
+//     protocol.handle('audio', (request) => {
+//         const url = new URL(request.url);
+//         const filePath = decodeURIComponent(url.pathname);
 
-        return net.fetch(`file://${filePath}`);
-    });
+//         return net.fetch(`file://${filePath}`);
+//     });
 
-    createWindow();
+//     createWindow();
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
-    });
-});
+//     app.on('activate', () => {
+//         if (BrowserWindow.getAllWindows().length === 0) {
+//             createWindow();
+//         }
+//     });
+// });
 
 
 // ipcMain.handle("record:start", () => {
@@ -79,15 +111,26 @@ ipcMain.handle("record:stop", async () => {
 
     try {
         await stopRecording();
+
+        // Wait a bit for file to be written
+        await new Promise(r => setTimeout(r, 500));
+
         const audioPath = path.join(process.cwd(), "output.wav");
+
+        console.log("Checking audio file at:", audioPath);
+        console.log("File exists:", fs.existsSync(audioPath));
+
         if (fs.existsSync(audioPath)) {
-            console.log("Audio file found at:", audioPath);
+            // Get file size to confirm it's valid
+            const stats = fs.statSync(audioPath);
+            console.log("Audio file size:", stats.size, "bytes");
+
             return {
                 success: true,
                 audioPath: audioPath
             };
         } else {
-            console.log("Audio file not found at:", audioPath);
+            console.log("Audio file not found!");
             return {
                 success: false,
                 message: "Audio file not found"
@@ -103,6 +146,7 @@ ipcMain.handle("record:stop", async () => {
 
 app.whenReady().then(() => {
     createWindow();
+    startAudioServer();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

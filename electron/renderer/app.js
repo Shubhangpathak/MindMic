@@ -9,6 +9,23 @@ function updateStatus(message, type = 'idle') {
     statusDiv.className = `status-${type}`;
 }
 
+audioPlayer.addEventListener('loadstart', () => {
+    console.log('Audio: loadstart event');
+});
+audioPlayer.addEventListener('canplay', () => {
+    console.log('Audio: canplay event - Ready to play!');
+});
+
+audioPlayer.addEventListener('error', (e) => {
+    console.error('Audio error:', e.target.error);
+    console.error('Error code:', e.target.error.code);
+    console.error('Error message:', e.target.error.message);
+});
+
+audioPlayer.addEventListener('loadedmetadata', () => {
+    console.log('Audio metadata loaded');
+});
+
 async function onStart() {
     try {
         startBtn.disabled = true
@@ -34,43 +51,30 @@ async function onStart() {
 }
 async function onStop() {
     try {
-        stopBtn.disabled = true
-        updateStatus("Stoping recording..", "idle")
+        stopBtn.disabled = true;
+        updateStatus("Stopping recording...", "idle");
 
-        const result = await window.recorder.stop()
-        console.log("start result", result)
+        const result = await window.recorder.stop();
+        console.log("Stop result:", result);
 
         startBtn.disabled = false;
 
-        if (result.success && result.audioPath) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+        if (result.success && result.audioUrl) {
+            console.log("Audio URL:", result.audioUrl);
 
-
-            // Convert Windows path to file URL
-            let fileUrl = result.audioPath;
-
-            // Replace backslashes with forward slashes
-            fileUrl = fileUrl.replace(/\\/g, '/');
-
-            // Add file:// protocol
-            if (!fileUrl.startsWith('file://')) {
-                fileUrl = 'file:///' + fileUrl;
-            }
-
-            console.log("Loading audio from:", fileUrl);
-
-            audioPlayer.src = fileUrl;
+            audioPlayer.src = result.audioUrl;
             audioPlayer.load();
-            updateStatus("Recording saved - Ready to play", "idle");
+            audioPlayer.play().catch(e => console.log("Autoplay prevented:", e));
+
+            updateStatus("Recording saved - Ready to play ▶️", "idle");
         } else {
+            console.error("Stop failed:", result.message);
             updateStatus(result.message || "Failed to stop", "error");
         }
-
     } catch (err) {
         console.error("Failed to stop recording:", err);
         updateStatus("Error: " + err.message, "error");
         startBtn.disabled = false;
-
     }
 }
 
