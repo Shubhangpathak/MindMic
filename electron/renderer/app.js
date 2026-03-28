@@ -2,6 +2,7 @@ const startBtn = document.getElementById('startBtn')
 const stopBtn = document.getElementById('stopBtn')
 const statusDiv = document.getElementById('status')
 const analyzeBtn = document.getElementById('analyzeBtn')
+const audioPlayer = document.getElementById('audioPlayer');
 
 function updateStatus(message, type = 'idle') {
     statusDiv.textContent = message;
@@ -41,8 +42,26 @@ async function onStop() {
 
         startBtn.disabled = false;
 
-        if (result.success) {
-            updateStatus("Recording saved to output.wav", "idle");
+        if (result.success && result.audioPath) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+
+            // Convert Windows path to file URL
+            let fileUrl = result.audioPath;
+
+            // Replace backslashes with forward slashes
+            fileUrl = fileUrl.replace(/\\/g, '/');
+
+            // Add file:// protocol
+            if (!fileUrl.startsWith('file://')) {
+                fileUrl = 'file:///' + fileUrl;
+            }
+
+            console.log("Loading audio from:", fileUrl);
+
+            audioPlayer.src = fileUrl;
+            audioPlayer.load();
+            updateStatus("Recording saved - Ready to play", "idle");
         } else {
             updateStatus(result.message || "Failed to stop", "error");
         }
@@ -55,7 +74,7 @@ async function onStop() {
     }
 }
 
-async function analyzeBtn() {
+async function onanalyzeBtn() {
     try {
         updateStatus("Sending Request to server", "analyzing")
     } catch (err) {
@@ -67,4 +86,5 @@ async function analyzeBtn() {
 
 startBtn.addEventListener("click", onStart)
 stopBtn.addEventListener("click", onStop)
+analyzeBtn.addEventListener("click", onanalyzeBtn)
 console.log("Renderer loaded and ready");

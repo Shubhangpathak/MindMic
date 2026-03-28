@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, protocol } = require('electron')
 const path = require("path");
+const fs = require("fs");
 const { startRecording, stopRecording } = require("../sound-recorder/record")
 
 function createWindow() {
@@ -18,6 +19,38 @@ function createWindow() {
     // Opens DevTools for debugging will diable in production
     win.webContents.openDevTools();
 }
+
+// Register custom protocol before app is ready
+protocol.registerSchemesAsPrivileged([
+    {
+        scheme: 'audio',
+        privileges: {
+            secure: true,
+            standard: true,
+            supportFetchAPI: true,
+            corsEnabled: true
+        }
+    }
+]);
+
+app.whenReady().then(() => {
+    // Register the audio protocol handler
+    protocol.handle('audio', (request) => {
+        const url = new URL(request.url);
+        const filePath = decodeURIComponent(url.pathname);
+
+        return net.fetch(`file://${filePath}`);
+    });
+
+    createWindow();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
+});
+
 
 // ipcMain.handle("record:start", () => {
 //     console.log("Main: starting recording")
@@ -46,7 +79,20 @@ ipcMain.handle("record:stop", async () => {
 
     try {
         await stopRecording();
-        return { success: true };
+        const audioPath = path.join(process.cwd(), "output.wav");
+        if (fs.existsSync(audioPath)) {
+            console.log("Audio file found at:", audioPath);
+            return {
+                success: true,
+                audioPath: audioPath
+            };
+        } else {
+            console.log("Audio file not found at:", audioPath);
+            return {
+                success: false,
+                message: "Audio file not found"
+            };
+        }
     } catch (err) {
         return {
             success: false,
@@ -55,10 +101,6 @@ ipcMain.handle("record:stop", async () => {
     }
 });
 
-
-// app.whenReady().then(() => {
-//     createWindow()
-// }) 
 app.whenReady().then(() => {
     createWindow();
 
