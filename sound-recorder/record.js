@@ -1,11 +1,64 @@
 console.log("record.js started");
-const { spawn } = require("child_process");
+const path = require("path");
+const { spawn, spawnSync } = require("child_process");
 
 const MICROPHONE_NAME = "Microphone Array (Realtek(R) Audio)";
 const SYSTEM_AUDIO = "Stereo Mix (Realtek(R) Audio)";
+const OUTPUT_FILE = path.resolve(__dirname, "..", "electron", "output.wav");
 
 let ffmpegProcess = null;
-let exitHandler = null;
+
+function listAudioDevices() {
+    const result = spawnSync(
+        "ffmpeg",
+        ["-list_devices", "true", "-f", "dshow", "-i", "dummy"],
+        { encoding: "utf8" }
+    );
+
+    const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+    const deviceMatches = [...output.matchAll(/"([^"]+)"\s+\(audio\)/g)];
+    return deviceMatches.map((match) => match[1]);
+}
+
+function buildRecordingArgs() {
+    const devices = listAudioDevices();
+    const hasMicrophone = devices.includes(MICROPHONE_NAME);
+    const hasSystemAudio = devices.includes(SYSTEM_AUDIO);
+
+    if (!hasMicrophone) {
+        throw new Error(
+            `Microphone device "${MICROPHONE_NAME}" was not found. Available audio devices: ${devices.join(", ") || "none"}`
+        );
+    }
+
+    if (!hasSystemAudio) {
+        console.log(`System audio device "${SYSTEM_AUDIO}" not found. Falling back to microphone-only recording.`);
+        return [
+            "-f", "dshow",
+            "-i", `audio=${MICROPHONE_NAME}`,
+            "-filter:a", "volume=4.0,acompressor=threshold=-20dB:ratio=2.5:attack=10:release=100",
+            "-ar", "44100",
+            "-ac", "1",
+            "-acodec", "pcm_s16le",
+            "-y",
+            OUTPUT_FILE
+        ];
+    }
+
+    return [
+        "-f", "dshow",
+        "-i", `audio=${MICROPHONE_NAME}`,
+        "-f", "dshow",
+        "-i", `audio=${SYSTEM_AUDIO}`,
+        "-filter_complex",
+        "[0:a]volume=4.0[mic];[mic][1:a]amix=inputs=2:weights=3 1,acompressor=threshold=-20dB:ratio=2.5:attack=10:release=100",
+        "-ar", "44100",
+        "-ac", "1",
+        "-acodec", "pcm_s16le",
+        "-y",
+        OUTPUT_FILE
+    ];
+}
 
 function startRecording() {
     return new Promise((resolve, reject) => {
@@ -16,39 +69,52 @@ function startRecording() {
         }
 
         console.log("Starting recording...");
+        const args = buildRecordingArgs();
+        let settled = false;
+        let startupTimer = null;
 
         ffmpegProcess = spawn(
             "ffmpeg",
-            [
-                "-f", "dshow",
-                "-i", `audio=${MICROPHONE_NAME}`,
-
-                "-f", "dshow",
-                "-i", `audio=${SYSTEM_AUDIO}`,
-
-                "-filter_complex",
-                "[0:a]volume=4.0[mic];[mic][1:a]amix=inputs=2:weights=3 1,acompressor=threshold=-20dB:ratio=2.5:attack=10:release=100",
-
-                "-ar", "44100",
-                "-ac", "1",
-                "-acodec", "pcm_s16le",
-
-                "-y",
-                "output.wav"
-            ],
-            { stdio: ["pipe", "inherit", "inherit"] }
+            args,
+            { stdio: ["pipe", "inherit", "pipe"] }
         );
 
-        // Resolve once the process starts
-        ffmpegProcess.on('spawn', () => {
-            console.log("FFmpeg process spawned successfully");
-            resolve({ success: true });
+        ffmpegProcess.stderr.on("data", (chunk) => {
+            console.error(chunk.toString());
         });
 
-        // Handle errors
+        ffmpegProcess.on('spawn', () => {
+            console.log("FFmpeg process spawned successfully");
+            startupTimer = setTimeout(() => {
+                if (!settled && ffmpegProcess) {
+                    settled = true;
+                    resolve({ success: true });
+                }
+            }, 750);
+        });
+
         ffmpegProcess.on('error', (err) => {
+            if (startupTimer) {
+                clearTimeout(startupTimer);
+            }
             ffmpegProcess = null;
-            reject(err);
+            if (!settled) {
+                settled = true;
+                reject(err);
+            }
+        });
+
+        ffmpegProcess.once('exit', (code) => {
+            if (startupTimer) {
+                clearTimeout(startupTimer);
+            }
+            const exitedBeforeReady = !settled;
+            ffmpegProcess = null;
+
+            if (exitedBeforeReady) {
+                settled = true;
+                reject(new Error(`FFmpeg exited before recording started (code ${code ?? "unknown"})`));
+            }
         });
     });
 }
@@ -61,9 +127,7 @@ function stopRecording() {
         }
 
         console.log("Stopping recording...");
-        // ffmpegProcess.stdin.write("q"); have it below now 
 
-        // Waits for the process to exit completely
         ffmpegProcess.once('exit', (code) => {
             console.log("FFmpeg process exited with code:", code);
             ffmpegProcess = null;
@@ -75,7 +139,10 @@ function stopRecording() {
             reject(err);
         });
 
-        ffmpegProcess.stdin.write("q");// sends quit command 
+        if (ffmpegProcess.stdin.writable) {
+            ffmpegProcess.stdin.write("q\n");
+            ffmpegProcess.stdin.end();
+        }
 
         // time out after 5s just in case 
         setTimeout(() => {
@@ -83,11 +150,10 @@ function stopRecording() {
                 console.log("Force killing ffmpeg due to timeout");
                 ffmpegProcess.kill();
                 ffmpegProcess = null;
-                exitHandler = null;
                 resolve({ success: true });
             }
         }, 5000);
     });
 }
 
-module.exports = { startRecording, stopRecording }
+module.exports = { startRecording, stopRecording, OUTPUT_FILE }
