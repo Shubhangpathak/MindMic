@@ -3,6 +3,9 @@ const stopBtn = document.getElementById('stopBtn');
 const statusDiv = document.getElementById('status');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const audioPlayer = document.getElementById('audioPlayer');
+const micSelect = document.getElementById('mic-select');
+
+let activeRecording = null;
 
 function updateStatus(message, type = 'idle') {
     statusDiv.textContent = message;
@@ -18,6 +21,41 @@ function loadAudioIntoPlayer(audioUrl, statusMessage = "Recording ready to play"
     updateStatus(statusMessage, "idle");
 }
 
+async function loadMicrophoneDropdown() {
+    if (!micSelect) {
+        return;
+    }
+
+    try {
+        // Ask once so device labels become available in Electron.
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        permissionStream.getTracks().forEach((track) => track.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const microphones = devices.filter((device) => device.kind === 'audioinput');
+
+        micSelect.innerHTML = '';
+
+        if (microphones.length === 0) {
+            micSelect.innerHTML = '<option>No microphones found</option>';
+            micSelect.disabled = true;
+            return;
+        }
+
+        micSelect.disabled = false;
+        microphones.forEach((mic, index) => {
+            const option = document.createElement('option');
+            option.value = mic.deviceId;
+            option.textContent = mic.label || `Microphone ${index + 1}`;
+            micSelect.appendChild(option);
+        });
+    } catch (err) {
+        console.error("Failed to load microphones:", err);
+        micSelect.innerHTML = '<option>Failed to load microphones</option>';
+        micSelect.disabled = true;
+    }
+}
+
 async function hydrateSavedRecording() {
     try {
         const result = await window.recorder.getSaved();
@@ -29,6 +67,65 @@ async function hydrateSavedRecording() {
     } catch (err) {
         console.error("Failed to load saved recording:", err);
     }
+}
+
+function stopTracks(stream) {
+    if (!stream) {
+        return;
+    }
+
+    stream.getTracks().forEach((track) => track.stop());
+}
+
+async function createMixedRecorder(selectedMicDeviceId) {
+    const micConstraints = selectedMicDeviceId
+        ? { audio: { deviceId: { exact: selectedMicDeviceId } }, video: false }
+        : { audio: true, video: false };
+
+    const micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
+    const systemStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: true,
+        video: true
+    });
+
+    const audioContext = new AudioContext();
+    const destination = audioContext.createMediaStreamDestination();
+
+    const micSource = audioContext.createMediaStreamSource(micStream);
+    micSource.connect(destination);
+
+    const systemAudioTracks = systemStream.getAudioTracks();
+    if (systemAudioTracks.length > 0) {
+        const systemSource = audioContext.createMediaStreamSource(
+            new MediaStream(systemAudioTracks)
+        );
+        systemSource.connect(destination);
+    } else {
+        console.warn("System loopback stream did not include audio tracks.");
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+
+    const mediaRecorder = new MediaRecorder(destination.stream, { mimeType });
+    const chunks = [];
+
+    mediaRecorder.addEventListener('dataavailable', (event) => {
+        if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+        }
+    });
+
+    mediaRecorder.start(250);
+
+    return {
+        audioContext,
+        mediaRecorder,
+        micStream,
+        systemStream,
+        chunks
+    };
 }
 
 audioPlayer.addEventListener('loadstart', () => {
@@ -65,29 +162,55 @@ async function onStart() {
         startBtn.disabled = true;
         updateStatus("Starting recording...", "recording");
 
-        const result = await window.recorder.start();
-        console.log("start result", result);
+        const selectedMic = micSelect && !micSelect.disabled ? micSelect.value : undefined;
+        activeRecording = await createMixedRecorder(selectedMic);
 
-        if (result.success) {
-            stopBtn.disabled = false;
-            updateStatus("Recording in progress", "recording");
-        } else {
-            startBtn.disabled = false;
-            updateStatus(result.message || "Failed to start", "error");
-        }
+        stopBtn.disabled = false;
+        updateStatus("Recording in progress", "recording");
     } catch (err) {
         console.error("Failed to start recording:", err);
+        activeRecording = null;
         startBtn.disabled = false;
         updateStatus("Error: " + err.message, "error");
     }
 }
 
 async function onStop() {
+    if (!activeRecording) {
+        updateStatus("Not recording", "error");
+        return;
+    }
+
     try {
         stopBtn.disabled = true;
         updateStatus("Stopping recording...", "idle");
 
-        const result = await window.recorder.stop();
+        const recording = activeRecording;
+        activeRecording = null;
+
+        const stoppedBlob = await new Promise((resolve, reject) => {
+            recording.mediaRecorder.addEventListener('stop', () => {
+                try {
+                    const blob = new Blob(recording.chunks, { type: recording.mediaRecorder.mimeType });
+                    resolve(blob);
+                } catch (error) {
+                    reject(error);
+                }
+            }, { once: true });
+
+            recording.mediaRecorder.addEventListener('error', (event) => {
+                reject(event.error || new Error("MediaRecorder error"));
+            }, { once: true });
+
+            recording.mediaRecorder.stop();
+        });
+
+        stopTracks(recording.micStream);
+        stopTracks(recording.systemStream);
+        await recording.audioContext.close();
+
+        const bytes = Array.from(new Uint8Array(await stoppedBlob.arrayBuffer()));
+        const result = await window.recorder.saveMixedAudio(bytes);
         console.log("Stop result:", result);
 
         startBtn.disabled = false;
@@ -134,5 +257,6 @@ async function onanalyzeBtn() {
 startBtn.addEventListener("click", onStart);
 stopBtn.addEventListener("click", onStop);
 analyzeBtn.addEventListener("click", onanalyzeBtn);
+loadMicrophoneDropdown();
 hydrateSavedRecording();
 console.log("Renderer loaded and ready");

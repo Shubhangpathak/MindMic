@@ -2,7 +2,7 @@ console.log("record.js started");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 
-const MICROPHONE_NAME = "Microphone Array (Realtek(R) Audio)";
+const DEFAULT_MICROPHONE_NAME = "Microphone Array (Realtek(R) Audio)";
 const SYSTEM_AUDIO = "Stereo Mix (Realtek(R) Audio)";
 const OUTPUT_FILE = path.resolve(__dirname, "..", "electron", "output.wav");
 
@@ -20,14 +20,15 @@ function listAudioDevices() {
     return deviceMatches.map((match) => match[1]);
 }
 
-function buildRecordingArgs() {
+function buildRecordingArgs(selectedMicrophone = DEFAULT_MICROPHONE_NAME) {
     const devices = listAudioDevices();
-    const hasMicrophone = devices.includes(MICROPHONE_NAME);
+    const microphoneName = selectedMicrophone || DEFAULT_MICROPHONE_NAME;
+    const hasMicrophone = devices.includes(microphoneName);
     const hasSystemAudio = devices.includes(SYSTEM_AUDIO);
 
     if (!hasMicrophone) {
         throw new Error(
-            `Microphone device "${MICROPHONE_NAME}" was not found. Available audio devices: ${devices.join(", ") || "none"}`
+            `Microphone device "${microphoneName}" was not found. Available audio devices: ${devices.join(", ") || "none"}`
         );
     }
 
@@ -35,7 +36,7 @@ function buildRecordingArgs() {
         console.log(`System audio device "${SYSTEM_AUDIO}" not found. Falling back to microphone-only recording.`);
         return [
             "-f", "dshow",
-            "-i", `audio=${MICROPHONE_NAME}`,
+            "-i", `audio=${microphoneName}`,
             "-filter:a", "volume=4.0,acompressor=threshold=-20dB:ratio=2.5:attack=10:release=100",
             "-ar", "44100",
             "-ac", "1",
@@ -47,7 +48,7 @@ function buildRecordingArgs() {
 
     return [
         "-f", "dshow",
-        "-i", `audio=${MICROPHONE_NAME}`,
+        "-i", `audio=${microphoneName}`,
         "-f", "dshow",
         "-i", `audio=${SYSTEM_AUDIO}`,
         "-filter_complex",
@@ -60,7 +61,7 @@ function buildRecordingArgs() {
     ];
 }
 
-function startRecording() {
+function startRecording(selectedMicrophone) {
     return new Promise((resolve, reject) => {
         if (ffmpegProcess) {
             console.log("Already recording");
@@ -69,7 +70,7 @@ function startRecording() {
         }
 
         console.log("Starting recording...");
-        const args = buildRecordingArgs();
+        const args = buildRecordingArgs(selectedMicrophone);
         let settled = false;
         let startupTimer = null;
 

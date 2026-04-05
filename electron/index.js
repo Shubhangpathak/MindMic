@@ -1,9 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, desktopCapturer, ipcMain, session } = require('electron');
 const path = require("path");
 const fs = require("fs");
+const { exec, execFile } = require("child_process");
 const { pathToFileURL } = require('url');
-const { startRecording, stopRecording, OUTPUT_FILE } = require("../sound-recorder/record")
+const { OUTPUT_FILE } = require("../sound-recorder/record");
 
+const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -17,9 +19,6 @@ function createWindow() {
     });
 
     win.loadFile(path.join(__dirname, "index.html"));
-
-    // Opens DevTools for debugging will diable in production
-    // win.webContents.openDevTools(); for developer option in application
     win.webContents.openDevTools();
 
     return win;
@@ -53,27 +52,68 @@ function getSavedRecordingPayload() {
     };
 }
 
-ipcMain.handle("record:start", async () => {
-    console.log("Main: starting recording");
+function configureDisplayMediaLoopback() {
+    session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+        try {
+            const sources = await desktopCapturer.getSources({
+                types: ['screen'],
+                thumbnailSize: { width: 1, height: 1 }
+            });
 
-    try {
-        await startRecording();
-        return { success: true };
-    } catch (err) {
-        return {
-            success: false,
-            message: err.message
-        };
-    }
+            if (!sources.length) {
+                callback({});
+                return;
+            }
+
+            callback({
+                video: sources[0],
+                audio: 'loopback'
+            });
+        } catch (error) {
+            console.error("Failed to provide display media source:", error);
+            callback({});
+        }
+    });
+}
+
+function convertWebmToWav() {
+    return new Promise((resolve, reject) => {
+        execFile(
+            "ffmpeg",
+            ["-y", "-i", TEMP_RECORDING_FILE, OUTPUT_FILE],
+            (error, stdout, stderr) => {
+                if (error) {
+                    reject(new Error(stderr || error.message));
+                    return;
+                }
+
+                resolve();
+            }
+        );
+    });
+}
+
+ipcMain.handle("record:getSaved", async () => {
+    return getSavedRecordingPayload();
 });
 
-ipcMain.handle("record:stop", async () => {
-    console.log("Main: stopped recording");
+ipcMain.handle("getMicrophones", async () => {
+    return new Promise((resolve) => {
+        exec('ffmpeg -list_devices true -f dshow -i dummy', (error, stdout, stderr) => {
+            resolve(`${stdout || ""}\n${stderr || ""}`);
+        });
+    });
+});
 
+ipcMain.handle("record:saveMixedAudio", async (event, byteArray) => {
     try {
-        await stopRecording();
+        fs.writeFileSync(TEMP_RECORDING_FILE, Buffer.from(byteArray));
+        await convertWebmToWav();
 
-        await new Promise(r => setTimeout(r, 500));
+        if (fs.existsSync(TEMP_RECORDING_FILE)) {
+            fs.unlinkSync(TEMP_RECORDING_FILE);
+        }
+
         return getSavedRecordingPayload();
     } catch (err) {
         return {
@@ -83,11 +123,8 @@ ipcMain.handle("record:stop", async () => {
     }
 });
 
-ipcMain.handle("record:getSaved", async () => {
-    return getSavedRecordingPayload();
-});
-
 app.whenReady().then(() => {
+    configureDisplayMediaLoopback();
     createWindow();
 
     app.on('activate', () => {
