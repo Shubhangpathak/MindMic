@@ -11,15 +11,3 @@ const openRouter = new OpenRouter({
   },
 });
 
-const completion = await openRouter.chat.send({
-  model: 'openai/gpt-5.2',
-  messages: [
-    {
-      role: 'user',
-      content: 'What is the meaning of life?',
-    },
-  ],
-  stream: false,
-});
-
-console.log(completion.choices[0].message.content);

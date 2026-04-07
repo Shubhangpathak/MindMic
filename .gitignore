@@ -3,7 +3,7 @@ node_modules/
 venv/
 env/
 __pycache__/
-
+.venv
 # 2. Generated Audio Files (Don't upload these!)
 # This covers output.wav, mic.wav, and system.wav in ALL folders
 *.wav

@@ -245,14 +245,40 @@ async function onStop() {
     }
 }
 
+// async function onanalyzeBtn() {
+//     try {
+//         updateStatus("Sending Request to server", "analyzing");
+//     } catch (err) {
+//         console.error("Failed to send request to the server", err);
+//         updateStatus("Error: " + err.message, "error");
+//     }
+// }
+
+//for analze button;
 async function onanalyzeBtn() {
     try {
-        updateStatus("Sending Request to server", "analyzing");
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = '⏳ Transcribing...';
+        updateStatus("Running Whisper locally...", "recording");
+
+        // Call the bridge → goes to index.js → spawns Python
+        const transcript = await window.recorder.transcribeLocal();
+
+        // Show result in the UI
+        document.getElementById('transcript-text').textContent = transcript;
+        document.getElementById('transcript-output').classList.remove('hidden');
+
+        updateStatus("Transcription complete ✓", "idle");
+
     } catch (err) {
-        console.error("Failed to send request to the server", err);
+        console.error("Transcription failed:", err);
         updateStatus("Error: " + err.message, "error");
+    } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = 'Analyze';
     }
 }
+
 
 startBtn.addEventListener("click", onStart);
 stopBtn.addEventListener("click", onStop);

@@ -123,6 +123,42 @@ ipcMain.handle("record:saveMixedAudio", async (event, byteArray) => {
     }
 });
 
+//for hadling the transcription 
+ipcMain.handle("transcribe:local", async () => {
+    return new Promise((resolve, reject) => {
+        
+        // OUTPUT_FILE is already imported at the top of your index.js
+        // that's the output.wav path — pass it to Python as an argument
+        const py = spawn('python', [
+            path.resolve(__dirname, '../transcribe.py'),
+            OUTPUT_FILE
+        ]);
+
+        let result = '';
+        let errorOut = '';
+
+        // Python's print() goes to stdout — collect it here
+        py.stdout.on('data', (data) => {
+            result += data.toString();
+        });
+
+        // Collect errors too so you can debug if it fails
+        py.stderr.on('data', (data) => {
+            errorOut += data.toString();
+        });
+
+        // When Python script finishes (exit code 0 = success)
+        py.on('close', (code) => {
+            if (code === 0 && result.trim()) {
+                resolve(result.trim());
+            } else {
+                reject(new Error(errorOut || 'Transcription failed'));
+            }
+        });
+    });
+});
+
+
 app.whenReady().then(() => {
     configureDisplayMediaLoopback();
     createWindow();

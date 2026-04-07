@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Heimdall Meeting Recorder</title>
+    <title>MindMic</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
   <body>
     <div class="container border-black-1px">
-      <h1 class="text-4xl bold">Heimdall Recorder</h1>
+      <h1 class="text-4xl bold">MindMic Recorder</h1>
       <div class="controls flex gap-4 w-auto mx-1px">
         <button
           id="startBtn"
@@ -41,18 +41,24 @@
       >
         analyze
       </button>
+      <select id="mode-select" class="border-1 border-[#BBBBBB] rounded-xl px-3 py-2 bg-[#F2F1F1] text-black">
+  <option value="local" selected>Local (Private)</option>
+  <option value="cloud" >☁️ Cloud (Fast)</option>
+</select>
+
     </div>
-    <select id="mic-select" class="border-1 border-[#C85C4A] px-3 py-2 bg-[#F2F1F1] text-black rounded-xl">
+    <select id="mic-select" class="border-1 border-[#BBBBBB] px-3 py-2 bg-[#F2F1F1] text-black rounded-xl">
   <option>Loading microphones...</option>
 </select>
 
-    <textarea
-      id="codeInput"
-      class="border-1 border-[#BBBBBB] bg-[#F2F1F1] w-sm rounded-xl"
-      disabled
-    >
-summary of the metting here...</textarea
-    >
+<div id="transcript-output" class="display:none border-1 border-[#BBBBBB] max-w-[580px] px-3 py-8 bg-[#F2F1F1] text-black rounded-xl">
+  <h3>Transcription of audio</h3>
+  <p id="transcript-text"></p>
+</div>
+<div id="summary-output" class="display:none border-1 border-[#BBBBBB] max-w-[580px] px-3 py-8 bg-[#F2F1F1] text-black rounded-xl select-none">
+  <h3>Summary will appear here</h3>
+  <p id="summary-text codeInput"></p>
+</div>
 
     <script src="./renderer/app.js"></script>
   </body>
