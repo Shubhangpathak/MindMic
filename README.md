@@ -1,4 +1,5 @@
 **Overview**
+
 I built this project after attending a small meeting where I found myself constantly switching between listening and taking notes. At some point, it hit me that this process could be automated.
 
 The obvious solution was to use existing APIs or tools, but most of them aren’t free or come with limitations. So instead of complaining about it like a normal person, I built my own.
