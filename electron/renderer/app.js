@@ -258,17 +258,32 @@ async function onStop() {
 async function onanalyzeBtn() {
     try {
         analyzeBtn.disabled = true;
-        analyzeBtn.textContent = '⏳ Transcribing...';
+        // analyzeBtn.textContent = 'Transcribing...';
         updateStatus("Running Whisper locally...", "recording");
 
-        // Call the bridge → goes to index.js → spawns Python
-        const transcript = await window.recorder.transcribeLocal();
+      
+        await window.recorder.transcribeLocal();
+        const transcript = await window.recorder.getTranscriptFile();
 
-        // Show result in the UI
-        document.getElementById('transcript-text').textContent = transcript;
-        document.getElementById('transcript-output').classList.remove('hidden');
+        const outputDiv = document.getElementById('transcript-output');
+        outputDiv.classList.remove('hidden');
 
-        updateStatus("Transcription complete ✓", "idle");
+        //making output look better by adding each line with a timestamp and on a new line
+        const lines = transcript.split('\n').filter(line => line.trim() !== '');
+        const formatted = lines.map(line => {
+            const parts = line.split(' ');
+            const time = parts.shift(); // first word = time
+            const text = parts.join(' ');
+            return `<div>
+            <span class="text-blue-300 font-medium">${time} </span> ${text}
+            </div>`;
+        }).join('');
+
+outputDiv.innerHTML = formatted;
+
+
+
+        updateStatus("Transcription complete", "idle");
 
     } catch (err) {
         console.error("Transcription failed:", err);

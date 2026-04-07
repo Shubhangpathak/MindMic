@@ -1,11 +1,27 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, session } = require('electron');
 const path = require("path");
 const fs = require("fs");
-const { exec, execFile } = require("child_process");
+const { exec, execFile, spawn } = require("child_process");
 const { pathToFileURL } = require('url');
 const { OUTPUT_FILE } = require("../sound-recorder/record");
 
 const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+
+function getPythonCommand() {
+    const venvPython = path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
+    if (fs.existsSync(venvPython)) {
+        return {
+            command: venvPython,
+            args: []
+        };
+    }
+
+    return {
+        command: "py",
+        args: ["-3"]
+    };
+}
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -129,10 +145,14 @@ ipcMain.handle("transcribe:local", async () => {
         
         // OUTPUT_FILE is already imported at the top of your index.js
         // that's the output.wav path — pass it to Python as an argument
-        const py = spawn('python', [
+        const { command, args } = getPythonCommand();
+        const py = spawn(command, [
+            ...args,
             path.resolve(__dirname, '../transcribe.py'),
             OUTPUT_FILE
-        ]);
+        ], {
+            cwd: PROJECT_ROOT
+        });
 
         let result = '';
         let errorOut = '';
@@ -147,15 +167,32 @@ ipcMain.handle("transcribe:local", async () => {
             errorOut += data.toString();
         });
 
+        py.on('error', (err) => {
+            reject(new Error(
+                `Unable to start Python for transcription. ${err.message}. ` +
+                `Create a virtual environment in ${PROJECT_ROOT} and install faster-whisper.`
+            ));
+        });
+
         // When Python script finishes (exit code 0 = success)
         py.on('close', (code) => {
             if (code === 0 && result.trim()) {
                 resolve(result.trim());
             } else {
-                reject(new Error(errorOut || 'Transcription failed'));
+                reject(new Error(errorOut || result || 'Transcription failed'));
             }
         });
     });
+});
+
+ipcMain.handle("get-transcript-file", async () => {
+    const transcriptPath = path.resolve(PROJECT_ROOT, "transcription.txt");
+
+    if (!fs.existsSync(transcriptPath)) {
+        throw new Error(`Transcript file not found at ${transcriptPath}`);
+    }
+
+    return fs.readFileSync(transcriptPath, "utf8");
 });
 
 
