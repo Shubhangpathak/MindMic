@@ -1,13 +1,34 @@
-import { OpenRouter } from '@openrouter/sdk';
 const path = require('path');
+const fs = require('fs');
+
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
-console.log(process.env.OPENROUTER_API_KEY);
 
-const openRouter = new OpenRouter({
-  apiKey: '<OPENROUTER_API_KEY>',
-  defaultHeaders: {
-    'HTTP-Referer': '<YOUR_SITE_URL>', // Optional. Site URL for rankings on openrouter.ai.
-    'X-OpenRouter-Title': '<YOUR_SITE_NAME>', // Optional. Site title for rankings on openrouter.ai.
-  },
+async function main() {
+  const { default: OpenAI } = await import('openai');
+  const transcriptionPath = path.join(__dirname, '../transcription.txt');
+  const transcription = fs.readFileSync(transcriptionPath, 'utf8');
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are an assistant that analyzes conversations and extracts key information. Ignore greetings and small talk.',
+      },
+      {
+        role: 'user',
+        content: transcription,
+      },
+    ],
+  });
+
+  console.log(completion.choices[0].message.content);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
 });
-
