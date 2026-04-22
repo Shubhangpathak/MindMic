@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "dotenv": "^17.3.1"
+    "@openrouter/sdk": "^0.12.19",
+    "dotenv": "^17.4.2",
+    "openai": "^5.0.0"
   }
 }

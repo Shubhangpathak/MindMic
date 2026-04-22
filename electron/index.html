@@ -7,6 +7,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
   <body>
+    <div class="main-container flex">
+      <div>
     <div class="container border-black-1px">
       <h1 class="text-4xl bold">MindMic Recorder</h1>
       <div class="controls flex gap-4 w-auto mx-1px">
@@ -43,7 +45,7 @@
       </button>
       <select id="mode-select" class="border-1 border-[#BBBBBB] rounded-xl px-3 py-2 bg-[#F2F1F1] text-black">
   <option value="local" selected>Local (Private)</option>
-  <option value="cloud" >☁️ Cloud (Fast)</option>
+  <option value="cloud" >☁️ Cloud ( wip )</option>
 </select>
 
     </div>
@@ -55,9 +57,18 @@
   <h3>Transcription of audio</h3>
   <p id="transcript-text"></p>
 </div>
+</div>
+<div class="container h-max-screen">
+  <div class="flex justify-content-between gap-13 pt-10">
+  <h3 class="text-3xl">Key notes & Summary</h3>
+  <button id="generate-summary" class="border-1 border-[#BBBBBB] px-3 py-xl bg-black text-white rounded-xl">Generate Summary</button>
+  </div>
 <div id="summary-output" class="display:none border-1 border-[#BBBBBB] max-w-[580px] px-3 py-8 bg-[#F2F1F1] text-black rounded-xl select-none">
-  <h3>Summary will appear here</h3>
+  <h3>Heading</h3>
+  <p> Summary will appear here</p>
   <p id="summary-text codeInput"></p>
+</div>
+</div>
 </div>
 
     <script src="./renderer/app.js"></script>

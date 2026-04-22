@@ -9,7 +9,7 @@ __pycache__/
 *.wav
 *.mp3
 *.m4a
-
+*transcription.txt
 # 3. System & IDE Junk
 .DS_Store
 Thumbs.db
