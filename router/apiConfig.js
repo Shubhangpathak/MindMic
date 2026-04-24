@@ -3,7 +3,7 @@ const fs = require('fs');
 
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-async function main() {
+async function generateSummary() {
   const { default: OpenAI } = await import('openai');
   const transcriptionPath = path.join(__dirname, '../transcription.txt');
   const transcription = fs.readFileSync(transcriptionPath, 'utf8');
@@ -26,9 +26,10 @@ async function main() {
   });
 
   console.log(completion.choices[0].message.content);
+  return completion.choices[0].message.content;
+  
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+module.exports = {
+  generateSummary,
+};

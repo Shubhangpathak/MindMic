@@ -4,6 +4,7 @@ const statusDiv = document.getElementById('status');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const audioPlayer = document.getElementById('audioPlayer');
 const micSelect = document.getElementById('mic-select');
+const summaryBtn = document.getElementById("summaryBtn");
 
 let activeRecording = null;
 
@@ -278,10 +279,7 @@ async function onanalyzeBtn() {
             <span class="text-blue-300 font-medium">${time} </span> ${text}
             </div>`;
         }).join('');
-
-outputDiv.innerHTML = formatted;
-
-
+        outputDiv.innerHTML = formatted;
 
         updateStatus("Transcription complete", "idle");
 
@@ -293,11 +291,25 @@ outputDiv.innerHTML = formatted;
         analyzeBtn.textContent = 'Analyze';
     }
 }
+async function onGenerateSummary() {
+  try {
+    const summary = await window.recorder.generateSummary();
+
+    const outputBox = document.getElementById("summary-output");
+    const summaryText = document.getElementById("summary-paragraph");
+
+    outputBox.classList.remove("hidden");
+    summaryText.textContent = summary;
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 
 startBtn.addEventListener("click", onStart);
 stopBtn.addEventListener("click", onStop);
 analyzeBtn.addEventListener("click", onanalyzeBtn);
+summaryBtn.addEventListener("click", onGenerateSummary);
 loadMicrophoneDropdown();
 hydrateSavedRecording();
 console.log("Renderer loaded and ready");

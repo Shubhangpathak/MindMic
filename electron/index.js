@@ -8,6 +8,8 @@ const { OUTPUT_FILE } = require("../sound-recorder/record");
 const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
+const { generateSummary } = require("../router/apiConfig");
+
 function getPythonCommand() {
     const venvPython = path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
     if (fs.existsSync(venvPython)) {
@@ -193,6 +195,12 @@ ipcMain.handle("get-transcript-file", async () => {
     }
 
     return fs.readFileSync(transcriptPath, "utf8");
+});
+
+//to handle the summary generation
+ipcMain.handle("summary:generate", async () => {
+  const summary = await generateSummary();
+  return summary;
 });
 
 
