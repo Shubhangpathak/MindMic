@@ -293,17 +293,32 @@ async function onanalyzeBtn() {
 }
 async function onGenerateSummary() {
   try {
-    const summary = await window.recorder.generateSummary();
+    const provider = document.getElementById("summary-provider")?.value || "api";
+    const model = document.getElementById("ollama-model")?.value || "llama3.1:8b";
+
+    const summary = await window.recorder.generateSummary({ provider, model });
 
     const outputBox = document.getElementById("summary-output");
     const summaryText = document.getElementById("summary-paragraph");
-
     outputBox.classList.remove("hidden");
     summaryText.textContent = summary;
   } catch (err) {
     console.error(err);
   }
 }
+// async function onGenerateSummary() {
+//   try {
+//     const summary = await window.recorder.generateSummary();
+
+//     const outputBox = document.getElementById("summary-output");
+//     const summaryText = document.getElementById("summary-paragraph");
+
+//     outputBox.classList.remove("hidden");
+//     summaryText.textContent = summary;
+//   } catch (err) {
+//     console.error(err);
+//   }
+// }
 
 
 startBtn.addEventListener("click", onStart);
