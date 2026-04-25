@@ -198,11 +198,10 @@ ipcMain.handle("get-transcript-file", async () => {
 });
 
 //to handle the summary generation
-ipcMain.handle("summary:generate", async () => {
-  const summary = await generateSummary();
+ipcMain.handle("summary:generate", async (event, options) => {
+  const summary = await generateSummary(options);
   return summary;
 });
-
 
 app.whenReady().then(() => {
     configureDisplayMediaLoopback();

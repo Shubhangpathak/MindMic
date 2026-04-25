@@ -61,7 +61,13 @@
 <div class="container h-max-screen">
   <div class="flex justify-content-between gap-13 pt-10">
   <h3 class="text-3xl">Key notes & Summary</h3>
-  <button class="border-1 border-[#BBBBBB] px-3 py-xl bg-black text-white rounded-xl" id = "summaryBtn">Generate Summary</button>
+  </div>
+  <div class="flex">
+    <button class="border-1 border-[#BBBBBB] px-3 py-xl bg-black text-white rounded-xl" id = "summaryBtn">Generate Summary</button>
+    <select id="mode-select" class="border-1 border-[#BBBBBB] rounded-xl px-3 py-2 bg-[#F2F1F1] text-black">
+      <option value="ollama" selected>Local ollama</option>
+      <option value="api" >Use api</option>
+    </select>
   </div>
 <div id="summary-output" class="display:none border-1 border-[#BBBBBB] max-w-[580px] px-3 py-8 bg-[#F2F1F1] text-black rounded-xl select-none">
   <h3>Heading</h3>
