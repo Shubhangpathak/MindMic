@@ -68,7 +68,7 @@ async function hydrateSavedRecording() {
     } catch (err) {
         console.error("Failed to load saved recording:", err);
     }
-}
+}   
 
 function stopTracks(stream) {
     if (!stream) {
@@ -293,17 +293,27 @@ async function onanalyzeBtn() {
 }
 async function onGenerateSummary() {
   try {
+    summaryBtn.disabled = true;
     const provider = document.getElementById("summary-provider")?.value || "api";
     const model = document.getElementById("ollama-model")?.value || "llama3.1:8b";
+    const providerName = provider === "ollama" ? "Ollama" : "API";
+
+    updateStatus(`${providerName} working...`, "recording");
 
     const summary = await window.recorder.generateSummary({ provider, model });
 
     const outputBox = document.getElementById("summary-output");
     const summaryText = document.getElementById("summary-paragraph");
+    const summaryPlaceholder = document.getElementById("summary-placeholder");
     outputBox.classList.remove("hidden");
+    summaryPlaceholder.classList.add("hidden");
     summaryText.textContent = summary;
+    updateStatus(`${providerName} summary ready`, "idle");
   } catch (err) {
     console.error(err);
+    updateStatus("Summary failed: " + err.message, "error");
+  } finally {
+    summaryBtn.disabled = false;
   }
 }
 // async function onGenerateSummary() {

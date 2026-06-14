@@ -1,7 +1,7 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, session } = require('electron');
 const path = require("path");
 const fs = require("fs");
-const { exec, execFile, spawn } = require("child_process");
+const { exec, spawn } = require("child_process");
 const { pathToFileURL } = require('url');
 const { OUTPUT_FILE } = require("../sound-recorder/record");
 
@@ -9,6 +9,7 @@ const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
 const { generateSummary } = require("../router/apiConfig");
+const { summarizeTranscript } = require("../router/ollamaConfig");
 
 function getPythonCommand() {
     const venvPython = path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe");
@@ -94,20 +95,54 @@ function configureDisplayMediaLoopback() {
     });
 }
 
+function createProcessStartError(command, error) {
+    if (error.code === "ENOENT") {
+        return new Error(`Unable to find ${command}. Add FFmpeg to PATH and restart the app.`);
+    }
+
+    if (error.code === "EACCES" || error.code === "EPERM") {
+        return new Error(
+            `Windows blocked ${command}. Allow ffmpeg.exe in Windows Security or reinstall FFmpeg from a trusted source.`
+        );
+    }
+
+    return new Error(`Unable to start ${command}: ${error.message}`);
+}
+
 function convertWebmToWav() {
     return new Promise((resolve, reject) => {
-        execFile(
+        const ffmpeg = spawn(
             "ffmpeg",
             ["-y", "-i", TEMP_RECORDING_FILE, OUTPUT_FILE],
-            (error, stdout, stderr) => {
-                if (error) {
-                    reject(new Error(stderr || error.message));
-                    return;
-                }
-
-                resolve();
-            }
+            { windowsHide: true }
         );
+
+        let stderr = "";
+        let settled = false;
+
+        ffmpeg.stderr.on("data", (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        ffmpeg.on("error", (error) => {
+            settled = true;
+            reject(createProcessStartError("ffmpeg", error));
+        });
+
+        ffmpeg.on("close", (code) => {
+            if (settled) {
+                return;
+            }
+
+            if (code === 0) {
+                resolve();
+                return;
+            }
+
+            const ffmpegMessage = stderr.trim()
+                || `FFmpeg exited with code ${code}. Windows may have blocked ffmpeg.exe; allow it in Windows Security or reinstall FFmpeg from a trusted source.`;
+            reject(new Error(`Audio conversion failed: ${ffmpegMessage}`));
+        });
     });
 }
 
@@ -199,8 +234,11 @@ ipcMain.handle("get-transcript-file", async () => {
 
 //to handle the summary generation
 ipcMain.handle("summary:generate", async (event, options) => {
-  const summary = await generateSummary(options);
-  return summary;
+  if (options?.provider === "ollama") {
+    return await summarizeTranscript();
+  }
+
+  return await generateSummary(options);
 });
 
 app.whenReady().then(() => {
