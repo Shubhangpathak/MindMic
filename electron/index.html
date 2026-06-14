@@ -6,9 +6,9 @@
     <title>MindMic</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
-  <body>
-    <div class="main-container flex">
-      <div>
+  <body class="h-screen overflow-hidden">
+    <div class="main-container flex h-screen overflow-hidden">
+      <div class="w-[720px] h-screen overflow-hidden">
     <div class="container border-black-1px">
       <h1 class="text-4xl bold">MindMic Recorder</h1>
       <div class="controls flex gap-4 w-auto mx-1px">
@@ -44,8 +44,8 @@
         analyze
       </button>
       <select id="mode-select" class="border-1 border-[#BBBBBB] rounded-xl px-3 py-2 bg-[#F2F1F1] text-black">
-  <option value="local" selected>Local (Private)</option>
-  <option value="cloud" >☁️ Cloud ( wip )</option>
+  <option value="local" selected>Local whisper</option>
+  <option value="cloud" >☁️ Cloud (Later)</option>
 </select>
 
     </div>
@@ -53,26 +53,26 @@
   <option>Loading microphones...</option>
 </select>
 
-<div id="transcript-output" class="display:none border-1 border-[#BBBBBB] max-w-[580px] px-3 py-8 bg-[#F2F1F1] text-black rounded-xl">
-  <h3>Transcription of audio</h3>
+<div id="transcript-output" class="border-1 border-[#BBBBBB] max-w-[705px] h-[calc(100vh-255px)] overflow-y-auto px-4 py-8 bg-[#F2F1F1] text-black rounded-xl">
+  <h3 class="text-2xl font-semibold">Meeting summary</h3>
   <p id="transcript-text"></p>
 </div>
 </div>
-<div class="container h-max-screen">
-  <div class="flex justify-content-between gap-13 pt-10">
-  <h3 class="text-3xl">Key notes & Summary</h3>
+<div class="container h-screen overflow-hidden px-10 py-8 max-w-[780px]">
+  <div class="flex justify-content-between gap-13">
+  <h2 class="text-5xl font-semibold tracking-normal mb-4">Key notes & Summary</h2>
   </div>
-  <div class="flex">
-    <button class="border-1 border-[#BBBBBB] px-3 py-xl bg-black text-white rounded-xl" id = "summaryBtn">Generate Summary</button>
-    <select id="mode-select" class="border-1 border-[#BBBBBB] rounded-xl px-3 py-2 bg-[#F2F1F1] text-black">
+  <div class="flex items-center gap-3 mb-4">
+    <button class="border-1 border-black px-5 py-3 bg-black text-white rounded-xl text-[1rem] cursor-pointer" id="summaryBtn">Generate Summary</button>
+    <select id="summary-provider" class="border-1 border-[#BBBBBB] rounded-xl px-4 py-3 bg-[#F2F1F1] text-black text-[1rem]">
       <option value="ollama" selected>Local ollama</option>
       <option value="api" >Use api</option>
     </select>
   </div>
-<div id="summary-output" class="display:none border-1 border-[#BBBBBB] max-w-[580px] px-3 py-8 bg-[#F2F1F1] text-black rounded-xl select-none">
-  <h3>Heading</h3>
-  <p> Summary will appear here</p>
-  <p id="summary-paragraph"></p>
+<div id="summary-output" class="border-1 border-[#BBBBBB] max-w-[720px] h-[calc(100vh-210px)] overflow-y-auto px-7 py-6 bg-[#F7F7F7] text-black rounded-xl select-none leading-7">
+  <h3 class="text-2xl font-semibold mb-2">Meeting summary</h3>
+  <p id="summary-placeholder" class="text-sm text-[#666666] mb-5">Summary will appear here</p>
+  <p id="summary-paragraph" class="text-[1.05rem] whitespace-pre-wrap"></p>
 </div>
 </div>
 </div>
