@@ -1,16 +1,123 @@
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const statusDiv = document.getElementById('status');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const audioPlayer = document.getElementById('audioPlayer');
 const micSelect = document.getElementById('mic-select');
 const summaryBtn = document.getElementById("summaryBtn");
+const toastRegion = document.getElementById('toast-region');
 
 let activeRecording = null;
+let isTranscribing = false;
+let isSummarizing = false;
+let recordingIndicator = null;
+let toastId = 0;
+
+const toastTypeStyles = {
+    idle: 'bg-[#2F9E44] shadow-[0_0_18px_rgba(47,158,68,0.28)]',
+    recording: 'bg-[#C92A2A] shadow-[0_0_18px_rgba(201,42,42,0.28)]',
+    error: 'bg-[#C92A2A] shadow-[0_0_18px_rgba(201,42,42,0.28)]'
+};
+
+function getFriendlyMessage(message) {
+    if (message.includes('Missing Python dependency: faster-whisper')) {
+        return 'Install faster-whisper to transcribe locally: .\\.venv\\Scripts\\python.exe -m pip install faster-whisper';
+    }
+
+    return message.replace(/^Error invoking remote method '[^']+': Error:\s*/, '');
+}
+
+function showToast(message, type = 'idle', duration = 3600) {
+    if (!toastRegion || !message) {
+        return;
+    }
+
+    const toast = document.createElement('div');
+    const id = ++toastId;
+    let remaining = duration;
+    let dismissTimer = null;
+    let startedAt = Date.now();
+    const accentClass = toastTypeStyles[type] || toastTypeStyles.idle;
+    const friendlyMessage = getFriendlyMessage(message);
+
+    toast.className = 'toast-enter pointer-events-auto grid min-h-[58px] grid-cols-[10px_1fr] items-center gap-3 overflow-hidden rounded-xl border border-[#BBBBBB] bg-[#F2F1F1]/85 px-4 py-3.5 text-black opacity-0 shadow-[0_12px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[16px] backdrop-saturate-150 translate-x-6 scale-[0.98]';
+    toast.dataset.type = type;
+    toast.dataset.toastId = String(id);
+    toast.innerHTML = `
+        <span class="h-[34px] w-2.5 rounded-full ${accentClass}" aria-hidden="true"></span>
+        <p class="m-0 text-[0.95rem] font-semibold leading-snug"></p>
+    `;
+    toast.querySelector('p').textContent = friendlyMessage;
+
+    const dismiss = () => {
+        window.clearTimeout(dismissTimer);
+        toast.classList.remove('toast-enter');
+        toast.classList.add('toast-leave');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    };
+
+    const startTimer = () => {
+        startedAt = Date.now();
+        dismissTimer = window.setTimeout(dismiss, remaining);
+    };
+
+    const pauseTimer = () => {
+        window.clearTimeout(dismissTimer);
+        remaining -= Date.now() - startedAt;
+    };
+
+    toast.addEventListener('mouseenter', pauseTimer);
+    toast.addEventListener('mouseleave', startTimer);
+
+    toastRegion.prepend(toast);
+    startTimer();
+}
+
+function showRecordingIndicator(message = "Recording in progress") {
+    if (!toastRegion) {
+        return;
+    }
+
+    if (recordingIndicator) {
+        recordingIndicator.querySelector('p').textContent = message;
+        return;
+    }
+
+    recordingIndicator = document.createElement('div');
+    recordingIndicator.className = 'toast-enter pointer-events-auto flex min-h-[52px] items-center gap-3 rounded-xl border border-[#BBBBBB] bg-[#F2F1F1]/90 px-4 py-3 text-black opacity-0 shadow-[0_12px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[16px] backdrop-saturate-150 translate-x-6 scale-[0.98]';
+    recordingIndicator.innerHTML = `
+        <span class="recording-pulse h-3.5 w-3.5 shrink-0 rounded-full bg-[#C85C4A] shadow-[0_0_14px_rgba(200,92,74,0.55)]" aria-hidden="true"></span>
+        <p class="m-0 text-[0.95rem] font-semibold leading-snug"></p>
+    `;
+    recordingIndicator.querySelector('p').textContent = message;
+    toastRegion.prepend(recordingIndicator);
+}
+
+function hideRecordingIndicator() {
+    if (!recordingIndicator) {
+        return;
+    }
+
+    const indicator = recordingIndicator;
+    recordingIndicator = null;
+    indicator.classList.remove('toast-enter');
+    indicator.classList.add('toast-leave');
+    indicator.addEventListener('animationend', () => indicator.remove(), { once: true });
+}
+
+function shouldToastStatus(message) {
+    return ![
+        "Ready to record",
+        "Starting recording...",
+        "Recording in progress",
+        "Stopping recording..."
+    ].includes(message);
+}
 
 function updateStatus(message, type = 'idle') {
-    statusDiv.textContent = message;
-    statusDiv.className = `status-${type}`;
+    if (shouldToastStatus(message)) {
+        const duration = message.includes('faster-whisper') ? 8000 : 3600;
+        showToast(message, type, duration);
+    }
 }
 
 function loadAudioIntoPlayer(audioUrl, statusMessage = "Recording ready to play") {
@@ -159,18 +266,25 @@ audioPlayer.addEventListener('play', () => {
 });
 
 async function onStart() {
+    if (activeRecording) {
+        showRecordingIndicator("Recording in progress");
+        return;
+    }
+
     try {
         startBtn.disabled = true;
         updateStatus("Starting recording...", "recording");
 
         const selectedMic = micSelect && !micSelect.disabled ? micSelect.value : undefined;
         activeRecording = await createMixedRecorder(selectedMic);
+        showRecordingIndicator("Recording in progress");
 
         stopBtn.disabled = false;
         updateStatus("Recording in progress", "recording");
     } catch (err) {
         console.error("Failed to start recording:", err);
         activeRecording = null;
+        hideRecordingIndicator();
         startBtn.disabled = false;
         updateStatus("Error: " + err.message, "error");
     }
@@ -184,6 +298,7 @@ async function onStop() {
 
     try {
         stopBtn.disabled = true;
+        hideRecordingIndicator();
         updateStatus("Stopping recording...", "idle");
 
         const recording = activeRecording;
@@ -241,6 +356,9 @@ async function onStop() {
         }
     } catch (err) {
         console.error("Failed to stop recording:", err);
+        if (activeRecording) {
+            showRecordingIndicator("Recording in progress");
+        }
         updateStatus("Error: " + err.message, "error");
         startBtn.disabled = false;
     }
@@ -257,8 +375,14 @@ async function onStop() {
 
 //for analze button;
 async function onanalyzeBtn() {
+    if (isTranscribing) {
+        updateStatus("Transcription already processing...", "recording");
+        return;
+    }
+
     try {
-        analyzeBtn.disabled = true;
+        isTranscribing = true;
+        analyzeBtn.classList.add('opacity-70');
         // analyzeBtn.textContent = 'Transcribing...';
         updateStatus("Running Whisper locally...", "recording");
 
@@ -287,13 +411,20 @@ async function onanalyzeBtn() {
         console.error("Transcription failed:", err);
         updateStatus("Error: " + err.message, "error");
     } finally {
-        analyzeBtn.disabled = false;
+        isTranscribing = false;
+        analyzeBtn.classList.remove('opacity-70');
         analyzeBtn.textContent = 'Analyze';
     }
 }
 async function onGenerateSummary() {
+  if (isSummarizing) {
+    updateStatus("Summary already processing...", "recording");
+    return;
+  }
+
   try {
-    summaryBtn.disabled = true;
+    isSummarizing = true;
+    summaryBtn.classList.add("opacity-70");
     const provider = document.getElementById("summary-provider")?.value || "api";
     const model = document.getElementById("ollama-model")?.value || "llama3.1:8b";
     const providerName = provider === "ollama" ? "Ollama" : "API";
@@ -313,7 +444,8 @@ async function onGenerateSummary() {
     console.error(err);
     updateStatus("Summary failed: " + err.message, "error");
   } finally {
-    summaryBtn.disabled = false;
+    isSummarizing = false;
+    summaryBtn.classList.remove("opacity-70");
   }
 }
 // async function onGenerateSummary() {

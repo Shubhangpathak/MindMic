@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { buildSummaryPrompt } = require('./summaryPrompt');
 
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
@@ -16,11 +17,11 @@ async function generateSummary() {
     messages: [
       {
         role: 'system',
-        content: 'You are an assistant that analyzes conversations and extracts key information. Ignore greetings and small talk.',
+        content: 'You follow formatting instructions exactly and return only the requested meeting summary.',
       },
       {
         role: 'user',
-        content: transcription,
+        content: buildSummaryPrompt(transcription),
       },
     ],
   });

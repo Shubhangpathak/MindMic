@@ -5,8 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MindMic</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+      .toast-enter {
+        animation: toast-in 240ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+      }
+
+      .toast-leave {
+        animation: toast-out 180ms ease forwards;
+      }
+
+      .recording-pulse {
+        animation: recording-pulse 1.15s ease-in-out infinite;
+      }
+
+      @keyframes toast-in {
+        to {
+          opacity: 1;
+          transform: translateX(0) scale(1);
+        }
+      }
+
+      @keyframes toast-out {
+        to {
+          opacity: 0;
+          transform: translateX(18px) scale(0.98);
+        }
+      }
+
+      @keyframes recording-pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+
+        50% {
+          opacity: 0.35;
+          transform: scale(0.72);
+        }
+      }
+    </style>
   </head>
   <body class="h-screen overflow-hidden">
+    <div
+      id="toast-region"
+      class="pointer-events-none fixed top-[18px] right-[18px] z-50 flex w-[min(340px,calc(100vw-36px))] flex-col gap-2.5"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
     <div class="main-container flex h-screen overflow-hidden">
       <div class="w-[720px] h-screen overflow-hidden">
     <div class="container border-black-1px">
@@ -30,7 +76,7 @@
       </div>
       <div
         id="status"
-        class="status-idle w-sm items-center gap-3 px-12 py-2 border-1 border-[#BBBBBB] bg-[#F2F1F1] text-black text-[1rem] rounded-xl"
+        class="hidden"
       >
         Ready to record
       </div>
@@ -53,8 +99,9 @@
   <option>Loading microphones...</option>
 </select>
 
-<div id="transcript-output" class="border-1 border-[#BBBBBB] max-w-[705px] h-[calc(100vh-255px)] overflow-y-auto px-4 py-8 bg-[#F2F1F1] text-black rounded-xl">
-  <h3 class="text-2xl font-semibold">Meeting summary</h3>
+<div id="transcript-output" class="border-1 border-[#BBBBBB] max-w-[720px] h-[calc(98vh-210px)] overflow-y-auto px-7 py-6 bg-[#F7F7F7] text-black rounded-xl select-none leading-7">
+  <h3 class="text-2xl font-semibold">Meeting Transcription</h3>
+  <p id="summary-placeholder" class="text-sm text-[#666666] mb-5">Transcription will appear here</p>
   <p id="transcript-text"></p>
 </div>
 </div>

@@ -44,7 +44,9 @@ Btw features include Audio Recording, Transcription, Summarization, Local Proces
 **Setup guide**
 
 First you are required to have [ffpeg](https://github.com/BtbN/FFmpeg-Builds/releases) setuped in environment system path for it to work. 
-Process: extract it > open environment variables > path > add `C:\ffmpeg\bin`.   
+Process: extract it > open environment variables > path > add `C:\ffmpeg\bin`.
+
+Install faster-whisper for voice transcription
 
 we have a frontend/main application inside electron folder can be started just by going inside electron folder and  can be started using  **`npm install && npm start`**
 
@@ -58,4 +60,14 @@ above setup was for audio recording now lets start with transcribing it
 start by creating an venv for python in root directory, followed by activating that venv which you just created and **`install faster-whisper`** which we are using to transcribe audio. ps, we can check that by using **`python transcribe.py`**. which which transcribe and write logs to transcription.txt.
 
 ---
+**Installing faster-whisper**
+
+```
+py -m venv .venv
+source .venv/Scripts/activate
+pip install faster-whisper
+```
+---
+**Screenshort**
+![Application Screenshot](image/image.png)
 <!-- Feedback: [click here to open](https://forms.gle/MoV2Bv6R79dRDKvGA) -->
