@@ -4,6 +4,8 @@ const fs = require("fs");
 const { exec, spawn } = require("child_process");
 const { pathToFileURL } = require('url');
 const { OUTPUT_FILE } = require("../sound-recorder/record");
+const { getMeetingsDir } = require('../services/storage');
+const { createMeeting } = require('../services/meetings.js');
 
 const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -158,21 +160,47 @@ ipcMain.handle("getMicrophones", async () => {
     });
 });
 
-ipcMain.handle("record:saveMixedAudio", async (event, byteArray) => {
+// ipcMain.handle("record:saveMixedAudio", async (event, byteArray) => {
+//     try {
+//         fs.writeFileSync(TEMP_RECORDING_FILE, Buffer.from(byteArray));
+//         await convertWebmToWav();
+
+//         if (fs.existsSync(TEMP_RECORDING_FILE)) {
+//             fs.unlinkSync(TEMP_RECORDING_FILE);
+//         }
+
+//         return getSavedRecordingPayload();
+//     } catch (err) {
+//         return {
+//             success: false,
+//             message: err.message
+//         };
+//     }
+// });
+ipcMain.handle('record:saveMixedAudio', async (event, data) => {
     try {
-        fs.writeFileSync(TEMP_RECORDING_FILE, Buffer.from(byteArray));
-        await convertWebmToWav();
-
-        if (fs.existsSync(TEMP_RECORDING_FILE)) {
-            fs.unlinkSync(TEMP_RECORDING_FILE);
-        }
-
-        return getSavedRecordingPayload();
-    } catch (err) {
-        return {
-            success: false,
-            message: err.message
+        // Open the box we sent from the UI
+        const { bytes, meetingId } = data; 
+        
+        // Find the specific folder for this meeting
+        const folderPath = path.join(getMeetingsDir(), meetingId);
+        
+        // Build the exact file path: .../meetings/mtg_001/audio.webm
+        const filePath = path.join(folderPath, 'audio.webm');
+        
+        // Save the audio file directly into that specific folder!
+        fs.writeFileSync(filePath, Buffer.from(bytes));
+        
+        console.log(`SUCCESS! Saved audio directly inside ${meetingId}`);
+        
+        // Tell the UI where the file is so the audio player works
+        return { 
+            success: true, 
+            audioUrl: `file://${filePath}` 
         };
+    } catch (error) {
+        console.error("Failed to save audio:", error);
+        return { success: false, message: error.message };
     }
 });
 
@@ -241,7 +269,15 @@ ipcMain.handle("summary:generate", async (event, options) => {
   return await generateSummary(options);
 });
 
+ipcMain.handle('meeting:create', () => {
+    return createMeeting();
+});
+
+
 app.whenReady().then(() => {
+const myDrawer = getMeetingsDir();
+    console.log("SUCCESS! My filing cabinet is located at:", myDrawer);
+
     configureDisplayMediaLoopback();
     createWindow();
 

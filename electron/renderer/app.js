@@ -5,6 +5,8 @@ const audioPlayer = document.getElementById('audioPlayer');
 const micSelect = document.getElementById('mic-select');
 const summaryBtn = document.getElementById("summaryBtn");
 const toastRegion = document.getElementById('toast-region');
+const testBtn = document.getElementById('test-meeting-btn');
+let activeMeetingId = null;
 
 let activeRecording = null;
 let isTranscribing = false;
@@ -326,7 +328,13 @@ async function onStop() {
         await recording.audioContext.close();
 
         const bytes = Array.from(new Uint8Array(await stoppedBlob.arrayBuffer()));
-        const result = await window.recorder.saveMixedAudio(bytes);
+        if (!activeMeetingId) {
+            updateStatus("Error: Create a New Meeting first!", "error");
+            startBtn.disabled = false;
+            return; // Stop the function here so we don't save a broken file
+            }
+        const recordingData = { bytes: bytes, meetingId: activeMeetingId };
+        const result = await window.recorder.saveMixedAudio(recordingData);
         console.log("Stop result:", result);
 
         startBtn.disabled = false;
@@ -461,6 +469,16 @@ async function onGenerateSummary() {
 //     console.error(err);
 //   }
 // }
+// Inside renderer/app.js
+testBtn.addEventListener('click', async () => {
+    console.log("Asking the Receptionist for a new meeting...");
+    const meetingDetails = await window.recorder.createMeeting(); 
+    
+    // THE NEW MAGIC LINE: Write the ID onto our post-it note!
+    activeMeetingId = meetingDetails.id; 
+    
+    console.log("The currently open folder on the desk is now:", activeMeetingId);
+});
 
 
 startBtn.addEventListener("click", onStart);

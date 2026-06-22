@@ -22,3 +22,5 @@ electron/node_modules/
 
 #dotenv
 .env
+transcription.txt
+architechture.md
