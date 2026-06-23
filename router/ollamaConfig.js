@@ -23,19 +23,19 @@ async function askOllama(prompt){
     }
 }
 //above was for testing now actual function
-async function summarizeTranscript(){
-try{
-    const transcriptPath = path.join(__dirname, "../transcription.txt");
-    const transcript = fs.readFileSync(transcriptPath, 'utf-8');
-    const finalPrompt = buildSummaryPrompt(transcript);
+async function summarizeTranscript(transcriptText) {
+    try {
+        // 1. The Manager handed us the text, so just use it directly!
+        const finalPrompt = buildSummaryPrompt(transcriptText);
 
-    const response = await askOllama(finalPrompt);
-    return response;
+        // 2. Ask Ollama for the summary
+        const response = await askOllama(finalPrompt);
+        return response;
 
-}catch(error){
-    console.error("Error in summarizeTranscript:", error);
-
-}
+    } catch (error) {
+        console.error("Error in summarizeTranscript:", error);
+        throw error; // (It's good to throw the error so the UI knows it failed)
+    }
 }
 module.exports = {
   askOllama,

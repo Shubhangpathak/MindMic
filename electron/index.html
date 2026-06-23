@@ -112,17 +112,17 @@
   <div class="flex items-center gap-3 mb-4">
     <button class="border-1 border-black px-5 py-3 bg-black text-white rounded-xl text-[1rem] cursor-pointer" id="summaryBtn">Generate Summary</button>
     <button id="test-meeting-btn" style="padding: 10px; background: blue; color: white;">
-  TEST: Create New Meeting Folder
+  Create New Meeting Folder
 </button>
     <select id="summary-provider" class="border-1 border-[#BBBBBB] rounded-xl px-4 py-3 bg-[#F2F1F1] text-black text-[1rem]">
       <option value="ollama" selected>Local ollama</option>
       <option value="api" >Use api</option>
     </select>
   </div>
-<div id="summary-output" class="border-1 border-[#BBBBBB] max-w-[720px] h-[calc(100vh-210px)] overflow-y-auto px-7 py-6 bg-[#F7F7F7] text-black rounded-xl select-none leading-7">
-  <h3 class="text-2xl font-semibold mb-2">Meeting summary</h3>
-  <p id="summary-placeholder" class="text-sm text-[#666666] mb-5">Summary will appear here</p>
-  <p id="summary-paragraph" class="text-[1.05rem] whitespace-pre-wrap"></p>
+  <div id="summary-output" class="border-1 border-[#BBBBBB] max-w-[720px] h-[calc(100vh-210px)] overflow-y-auto px-7 py-6 bg-[#F7F7F7] text-black rounded-xl select-none leading-7">
+    <h3 id="summary-title" class="text-2xl font-semibold mb-2">Meeting summary</h3>
+    <p id="summary-placeholder" class="text-sm mb-5">Summary will appear here</p>
+    <div id="summary-paragraph" class="text-[1.05rem] whitespace-pre-wrap"></div>
 </div>
 </div>
 </div>

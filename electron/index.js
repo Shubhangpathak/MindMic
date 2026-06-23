@@ -205,68 +205,158 @@ ipcMain.handle('record:saveMixedAudio', async (event, data) => {
 });
 
 //for hadling the transcription 
-ipcMain.handle("transcribe:local", async () => {
-    return new Promise((resolve, reject) => {
+// ipcMain.handle("transcribe:local", async () => {
+//     return new Promise((resolve, reject) => {
         
-        // OUTPUT_FILE is already imported at the top of your index.js
-        // that's the output.wav path — pass it to Python as an argument
-        const { command, args } = getPythonCommand();
-        const py = spawn(command, [
-            ...args,
-            path.resolve(__dirname, '../transcribe.py'),
-            OUTPUT_FILE
-        ], {
-            cwd: PROJECT_ROOT
+//         // OUTPUT_FILE is already imported at the top of your index.js
+//         // that's the output.wav path — pass it to Python as an argument
+//         const { command, args } = getPythonCommand();
+//         const py = spawn(command, [
+//             ...args,
+//             path.resolve(__dirname, '../transcribe.py'),
+//             OUTPUT_FILE
+//         ], {
+//             cwd: PROJECT_ROOT
+//         });
+
+//         let result = '';
+//         let errorOut = '';
+
+//         // Python's print() goes to stdout — collect it here
+//         py.stdout.on('data', (data) => {
+//             result += data.toString();
+//         });
+
+//         // Collect errors too so you can debug if it fails
+//         py.stderr.on('data', (data) => {
+//             errorOut += data.toString();
+//         });
+
+//         py.on('error', (err) => {
+//             reject(new Error(
+//                 `Unable to start Python for transcription. ${err.message}. ` +
+//                 `Create a virtual environment in ${PROJECT_ROOT} and install faster-whisper.`
+//             ));
+//         });
+
+//         // When Python script finishes (exit code 0 = success)
+//         py.on('close', (code) => {
+//             if (code === 0 && result.trim()) {
+//                 resolve(result.trim());
+//             } else {
+//                 reject(new Error(errorOut || result || 'Transcription failed'));
+//             }
+//         });
+//     });
+// });
+ipcMain.handle('transcribe:local', async (event, meetingId) => {
+    return new Promise((resolve, reject) => {
+        const folderPath = path.join(getMeetingsDir(), meetingId);
+        
+        const audioPath = path.join(folderPath, 'audio.webm'); 
+        const transcriptPath = path.join(folderPath, 'transcript.txt'); 
+
+        const { spawn } = require('child_process');
+        
+        // FIX 1: Give the exact map to the python script
+        const scriptPath = path.join(__dirname, '..', 'transcribe.py');
+        
+        // FIX 2: Give the exact map to your virtual environment's python.exe!
+        const pythonExecutable = path.join(__dirname, '..', '.venv', 'Scripts', 'python.exe');
+
+        // Spawn it with the absolute paths
+        const pythonProcess = spawn(pythonExecutable, [scriptPath, audioPath, transcriptPath]);
+
+        // FIX 3: The Walkie-Talkie! Print exactly what the Scribe is doing
+        pythonProcess.stdout.on('data', (data) => {
+            console.log(`SCRIBE SAYS: ${data.toString()}`);
         });
 
-        let result = '';
-        let errorOut = '';
-
-        // Python's print() goes to stdout — collect it here
-        py.stdout.on('data', (data) => {
-            result += data.toString();
+        // Print exactly what the Scribe is complaining about
+        pythonProcess.stderr.on('data', (data) => {
+            console.error(`SCRIBE ERROR: ${data.toString()}`);
         });
 
-        // Collect errors too so you can debug if it fails
-        py.stderr.on('data', (data) => {
-            errorOut += data.toString();
-        });
-
-        py.on('error', (err) => {
-            reject(new Error(
-                `Unable to start Python for transcription. ${err.message}. ` +
-                `Create a virtual environment in ${PROJECT_ROOT} and install faster-whisper.`
-            ));
-        });
-
-        // When Python script finishes (exit code 0 = success)
-        py.on('close', (code) => {
-            if (code === 0 && result.trim()) {
-                resolve(result.trim());
-            } else {
-                reject(new Error(errorOut || result || 'Transcription failed'));
-            }
+        pythonProcess.on('close', (code) => {
+            if (code === 0) resolve(true);
+            else reject(new Error(`Python crashed with code ${code}. Check the terminal for SCRIBE ERROR!`));
         });
     });
 });
 
-ipcMain.handle("get-transcript-file", async () => {
-    const transcriptPath = path.resolve(PROJECT_ROOT, "transcription.txt");
+// ipcMain.handle("get-transcript-file", async () => {
+//     const transcriptPath = path.resolve(PROJECT_ROOT, "transcription.txt");
 
+//     if (!fs.existsSync(transcriptPath)) {
+//         throw new Error(`Transcript file not found at ${transcriptPath}`);
+//     }
+
+//     return fs.readFileSync(transcriptPath, "utf8");
+// });
+
+ipcMain.handle('get-transcript-file', async (event, meetingId) => {
+    const folderPath = path.join(getMeetingsDir(), meetingId);
+    const transcriptPath = path.join(folderPath, 'transcript.txt');
+    
     if (!fs.existsSync(transcriptPath)) {
-        throw new Error(`Transcript file not found at ${transcriptPath}`);
+        throw new Error("Transcript file not found in folder!");
     }
-
-    return fs.readFileSync(transcriptPath, "utf8");
+    
+    // Read the file directly from the meeting folder
+    return fs.readFileSync(transcriptPath, 'utf-8');
 });
 
 //to handle the summary generation
-ipcMain.handle("summary:generate", async (event, options) => {
-  if (options?.provider === "ollama") {
-    return await summarizeTranscript();
-  }
+// ipcMain.handle("summary:generate", async (event, options) => {
+//   if (options?.provider === "ollama") {
+//     return await summarizeTranscript();
+//   }
 
-  return await generateSummary(options);
+//   return await generateSummary(options);
+// });
+
+// PASTE THIS IN electron/index.js:
+
+ipcMain.handle("summary:generate", async (event, options) => {
+    try {
+        const { provider, meetingId } = options;
+        let summaryText = "";
+
+        // 1. OPEN THE FOLDER AND READ THE TRANSCRIPT FIRST
+        const folderPath = path.join(getMeetingsDir(), meetingId);
+        const transcriptFilePath = path.join(folderPath, 'transcript.txt');
+        
+        if (!fs.existsSync(transcriptFilePath)) {
+            throw new Error("No transcript found! Please click Analyze before summarizing.");
+        }
+        
+        // Grab the actual text off the page
+        const transcriptText = fs.readFileSync(transcriptFilePath, 'utf-8');
+
+        // 2. HAND THE TEXT DIRECTLY TO THE AI WORKERS
+        if (provider === "ollama") {
+            summaryText = await summarizeTranscript(transcriptText); 
+        } else {
+            summaryText = await generateSummary(transcriptText);
+        }
+
+        // 3. Save the result to the filing cabinet!
+        const summaryFilePath = path.join(folderPath, 'summary.json');
+        const summaryData = {
+            generatedAt: new Date().toISOString(),
+            provider: provider,
+            text: summaryText
+        };
+        
+        fs.writeFileSync(summaryFilePath, JSON.stringify(summaryData, null, 2));
+        console.log(`SUCCESS! Saved summary inside ${meetingId}`);
+
+        return summaryText;
+
+    } catch (error) {
+        console.error("Failed to generate or save summary:", error);
+        throw error;
+    }
 });
 
 ipcMain.handle('meeting:create', () => {

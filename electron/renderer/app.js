@@ -391,17 +391,23 @@ async function onanalyzeBtn() {
     try {
         isTranscribing = true;
         analyzeBtn.classList.add('opacity-70');
-        // analyzeBtn.textContent = 'Transcribing...';
         updateStatus("Running Whisper locally...", "recording");
 
-      
-        await window.recorder.transcribeLocal();
-        const transcript = await window.recorder.getTranscriptFile();
+        // 1. Check for the post-it note!
+        if (!activeMeetingId) {
+            updateStatus("Error: No active meeting selected! Start with creating new meeting" , "error");
+            isTranscribing = false;
+            return;
+        }
+
+        // 2. Hand the post-it note to the Receptionist!
+        await window.recorder.transcribeLocal(activeMeetingId);
+        const transcript = await window.recorder.getTranscriptFile(activeMeetingId);
 
         const outputDiv = document.getElementById('transcript-output');
         outputDiv.classList.remove('hidden');
 
-        //making output look better by adding each line with a timestamp and on a new line
+        // Making output look better by adding each line with a timestamp and on a new line
         const lines = transcript.split('\n').filter(line => line.trim() !== '');
         const formatted = lines.map(line => {
             const parts = line.split(' ');
@@ -411,8 +417,8 @@ async function onanalyzeBtn() {
             <span class="text-blue-300 font-medium">${time} </span> ${text}
             </div>`;
         }).join('');
+        
         outputDiv.innerHTML = formatted;
-
         updateStatus("Transcription complete", "idle");
 
     } catch (err) {
@@ -424,6 +430,20 @@ async function onanalyzeBtn() {
         analyzeBtn.textContent = 'Analyze';
     }
 }
+
+function formatSummary(rawText) {
+    let html = rawText
+        .replace(/Overview:/g, '<h4 class="text-lg font-bold mt-6 mb-2 text-blue-600">Overview</h4>')
+        .replace(/Key Notes:/g, '<h4 class="text-lg font-bold mt-6 mb-2 text-blue-600">Key Notes</h4>')
+        .replace(/Action Items:/g, '<h4 class="text-lg font-bold mt-6 mb-2 text-blue-600">Action Items</h4>');
+
+    // Turn dashes into HTML bullet points
+    html = html.replace(/-\s(.*)/g, '<li class="ml-5 list-disc mb-1">$1</li>');
+
+    return html;
+}
+
+// 2. The Updated Summary Function
 async function onGenerateSummary() {
   if (isSummarizing) {
     updateStatus("Summary already processing...", "recording");
@@ -437,17 +457,44 @@ async function onGenerateSummary() {
     const model = document.getElementById("ollama-model")?.value || "llama3.1:8b";
     const providerName = provider === "ollama" ? "Ollama" : "API";
 
+    if (!activeMeetingId) {
+        updateStatus("Error: No active meeting selected! Start with creating new meeting", "error");
+        isSummarizing = false;
+        return;
+    }
+
     updateStatus(`${providerName} working...`, "recording");
 
-    const summary = await window.recorder.generateSummary({ provider, model });
+    const requestBox = { 
+        provider: provider, 
+        model: model, 
+        meetingId: activeMeetingId 
+    };
 
+    // Ask the Receptionist for the summary
+    const summary = await window.recorder.generateSummary(requestBox);
+
+    // --- THIS IS THE PART YOU WERE MISSING --- //
+    // Grab the UI boxes from your screen
     const outputBox = document.getElementById("summary-output");
-    const summaryText = document.getElementById("summary-paragraph");
+    const summaryText = document.getElementById("summary-paragraph"); 
     const summaryPlaceholder = document.getElementById("summary-placeholder");
+    const summaryTitle = document.getElementById("summary-title");
+
+    // Make the box visible and hide the placeholder
     outputBox.classList.remove("hidden");
-    summaryPlaceholder.classList.add("hidden");
-    summaryText.textContent = summary;
+    if(summaryPlaceholder) summaryPlaceholder.classList.add("hidden");
+
+    // Add the dynamic title
+    if(summaryTitle) {
+        summaryTitle.textContent = `Summary for ${activeMeetingId}`;
+    }
+
+    // Pass the raw text through our beautifier and put it on the screen!
+    summaryText.innerHTML = formatSummary(summary);
+    
     updateStatus(`${providerName} summary ready`, "idle");
+
   } catch (err) {
     console.error(err);
     updateStatus("Summary failed: " + err.message, "error");
@@ -456,6 +503,7 @@ async function onGenerateSummary() {
     summaryBtn.classList.remove("opacity-70");
   }
 }
+
 // async function onGenerateSummary() {
 //   try {
 //     const summary = await window.recorder.generateSummary();
