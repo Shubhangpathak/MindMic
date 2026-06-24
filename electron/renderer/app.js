@@ -1,3 +1,4 @@
+// 1. GLOBAL VARIABLES & UI ELEMENTS
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const analyzeBtn = document.getElementById('analyzeBtn');
@@ -5,15 +6,20 @@ const audioPlayer = document.getElementById('audioPlayer');
 const micSelect = document.getElementById('mic-select');
 const summaryBtn = document.getElementById("summaryBtn");
 const toastRegion = document.getElementById('toast-region');
-const testBtn = document.getElementById('test-meeting-btn');
-let activeMeetingId = null;
+const newMeetingBtn = document.getElementById('new-meeting-btn');
+const sidebarList = document.getElementById('sidebar-list');
+const emptyStateOverlay = document.getElementById('empty-state-overlay');
+const meetingTitle = document.getElementById('meeting-title');
+// const outputBox = document.getElementById("summary-output");
 
+let activeMeetingId = null;
 let activeRecording = null;
 let isTranscribing = false;
 let isSummarizing = false;
 let recordingIndicator = null;
 let toastId = 0;
 
+// 2. UI TOASTS & NOTIFICATIONS (The popup messages)
 const toastTypeStyles = {
     idle: 'bg-[#2F9E44] shadow-[0_0_18px_rgba(47,158,68,0.28)]',
     recording: 'bg-[#C92A2A] shadow-[0_0_18px_rgba(201,42,42,0.28)]',
@@ -24,14 +30,11 @@ function getFriendlyMessage(message) {
     if (message.includes('Missing Python dependency: faster-whisper')) {
         return 'Install faster-whisper to transcribe locally: .\\.venv\\Scripts\\python.exe -m pip install faster-whisper';
     }
-
     return message.replace(/^Error invoking remote method '[^']+': Error:\s*/, '');
 }
 
 function showToast(message, type = 'idle', duration = 3600) {
-    if (!toastRegion || !message) {
-        return;
-    }
+    if (!toastRegion || !message) return;
 
     const toast = document.createElement('div');
     const id = ++toastId;
@@ -42,8 +45,6 @@ function showToast(message, type = 'idle', duration = 3600) {
     const friendlyMessage = getFriendlyMessage(message);
 
     toast.className = 'toast-enter pointer-events-auto grid min-h-[58px] grid-cols-[10px_1fr] items-center gap-3 overflow-hidden rounded-xl border border-[#BBBBBB] bg-[#F2F1F1]/85 px-4 py-3.5 text-black opacity-0 shadow-[0_12px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[16px] backdrop-saturate-150 translate-x-6 scale-[0.98]';
-    toast.dataset.type = type;
-    toast.dataset.toastId = String(id);
     toast.innerHTML = `
         <span class="h-[34px] w-2.5 rounded-full ${accentClass}" aria-hidden="true"></span>
         <p class="m-0 text-[0.95rem] font-semibold leading-snug"></p>
@@ -69,16 +70,12 @@ function showToast(message, type = 'idle', duration = 3600) {
 
     toast.addEventListener('mouseenter', pauseTimer);
     toast.addEventListener('mouseleave', startTimer);
-
     toastRegion.prepend(toast);
     startTimer();
 }
 
 function showRecordingIndicator(message = "Recording in progress") {
-    if (!toastRegion) {
-        return;
-    }
-
+    if (!toastRegion) return;
     if (recordingIndicator) {
         recordingIndicator.querySelector('p').textContent = message;
         return;
@@ -95,10 +92,7 @@ function showRecordingIndicator(message = "Recording in progress") {
 }
 
 function hideRecordingIndicator() {
-    if (!recordingIndicator) {
-        return;
-    }
-
+    if (!recordingIndicator) return;
     const indicator = recordingIndicator;
     recordingIndicator = null;
     indicator.classList.remove('toast-enter');
@@ -106,25 +100,144 @@ function hideRecordingIndicator() {
     indicator.addEventListener('animationend', () => indicator.remove(), { once: true });
 }
 
-function shouldToastStatus(message) {
-    return ![
-        "Ready to record",
-        "Starting recording...",
-        "Recording in progress",
-        "Stopping recording..."
-    ].includes(message);
-}
-
 function updateStatus(message, type = 'idle') {
-    if (shouldToastStatus(message)) {
+    const skipToasts = ["Ready to record", "Starting recording...", "Recording in progress", "Stopping recording..."];
+    if (!skipToasts.includes(message)) {
         const duration = message.includes('faster-whisper') ? 8000 : 3600;
         showToast(message, type, duration);
     }
 }
 
-function loadAudioIntoPlayer(audioUrl, statusMessage = "Recording ready to play") {
-    console.log("Loading audio URL:", audioUrl);
+// 3. SIDEBAR & MEETING NAVIGATION
+function getActiveMeetingTitle() {
+    const activeButton = sidebarList?.querySelector(`[data-meeting-id="${activeMeetingId}"]`);
+    return activeButton?.dataset.meetingTitle || activeMeetingId;
+}
 
+async function loadSidebar() {
+    if (!sidebarList) return;
+
+    try {
+        const meetings = await window.recorder.getMeetings();
+        sidebarList.innerHTML = '';
+
+        if (!meetings.length) {
+            sidebarList.innerHTML = '<p class="px-2 py-3 text-[12px] leading-5 text-[#777180]">No meetings yet.</p>';
+            return;
+        }
+
+        meetings.forEach((meeting) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.meetingId = meeting.id;
+            btn.dataset.meetingTitle = meeting.title;
+            btn.className = 'group w-full rounded-lg border border-transparent px-3 py-3 text-left transition border-[#D7D4E3] hover:bg-white/66 hover:shadow-sm';
+
+            // Highlight the active meeting
+            if (meeting.id === activeMeetingId) {
+                btn.classList.add('border-[#C9C5DD]', 'bg-white/78', 'shadow-sm', 'border-l-4', 'border-l-[#C85C4A]');
+            }
+
+            btn.innerHTML = `
+                <span class="block truncate text-[13px] font-semibold text-[#24212D]">${meeting.title}</span>
+            `;
+
+            // WHEN A SIDEBAR MEETING IS CLICKED:
+            btn.addEventListener('click', async () => {
+                activeMeetingId = meeting.id;
+                emptyStateOverlay?.classList.add('hidden');
+                
+                // Refresh sidebar visually
+                loadSidebar();
+
+                // Update Titles
+                if (meetingTitle) meetingTitle.textContent = meeting.title;
+                const summaryTitle = document.getElementById("summary-title");
+                // if (summaryTitle) summaryTitle.textContent = `Summary for ${meeting.title}`;
+
+                updateStatus("Loading meeting details...", "idle");
+
+                // FETCH THE FOLDER CONTENTS!
+                try {
+                    const details = await window.recorder.getMeetingDetails(activeMeetingId);
+
+                    // 1. Load Audio
+                    if (details.audioUrl) {
+                        loadAudioIntoPlayer(details.audioUrl, "Loaded past recording");
+                    } else {
+                        audioPlayer.src = '';
+                    }
+
+                    // 2. Load Transcript
+                    const outputDiv = document.getElementById('transcript-output');
+                    if (details.transcript) {
+                        outputDiv.classList.remove('hidden');
+                        const lines = details.transcript.split('\n').filter(line => line.trim() !== '');
+                        outputDiv.innerHTML = lines.map(line => {
+                            const parts = line.split(' ');
+                            const time = parts.shift(); 
+                            return `<div><span class="text-blue-300 font-medium">${time} </span> ${parts.join(' ')}</div>`;
+                        }).join('');
+                    } else {
+                        outputDiv.classList.add('hidden');
+                        outputDiv.innerHTML = '';
+                    }
+
+                    // 3. Load Summary
+                    const outputBox = document.getElementById("summary-output");
+                    const summaryText = document.getElementById("summary-paragraph");
+                    const summaryPlaceholder = document.getElementById("summary-placeholder");
+                    
+                    if (details.summary) {
+                        outputBox.classList.remove("hidden");
+                        if(summaryPlaceholder) summaryPlaceholder.classList.add("hidden");
+                        summaryText.innerHTML = formatSummary(details.summary);
+                    } else {
+                        outputBox.classList.add("hidden");
+                        summaryText.innerHTML = '';
+                    }
+
+                    updateStatus(`Opened folder: ${meeting.title}`, "idle");
+                } catch (err) {
+                    console.error("Failed to load details:", err);
+                    updateStatus("Failed to load meeting contents.", "error");
+                }
+            });
+
+            sidebarList.appendChild(btn);
+        });
+    } catch (err) {
+        console.error("Failed to load meetings:", err);
+    }
+}
+
+async function handleNewMeetingClick() {
+    console.log("Asking the Receptionist for a new meeting...");
+    const meetingDetails = await window.recorder.createMeeting(); 
+    
+    activeMeetingId = meetingDetails.id; 
+    
+    // Hide the empty state cover sheet
+    if(emptyStateOverlay) emptyStateOverlay.classList.add('hidden');
+
+    // Update Titles
+    if (meetingTitle) meetingTitle.textContent = meetingDetails.title;
+    const summaryTitle = document.getElementById("summary-title");
+    if (summaryTitle) summaryTitle.textContent = `Summary for ${meetingDetails.title}`;
+    
+    // Refresh Sidebar
+    loadSidebar();
+
+    // Clear out the workspace for the new meeting!
+    audioPlayer.src = '';
+    document.getElementById('transcript-output').innerHTML = '';
+    document.getElementById('transcript-output').classList.add('hidden');
+    document.getElementById("summary-output").classList.add("hidden");
+    document.getElementById("summary-placeholder")?.classList.remove("hidden");
+}
+
+// 4. AUDIO & MICROPHONE SETUP
+function loadAudioIntoPlayer(audioUrl, statusMessage = "Recording ready to play") {
     audioPlayer.src = audioUrl;
     audioPlayer.preload = 'auto';
     audioPlayer.load();
@@ -132,12 +245,9 @@ function loadAudioIntoPlayer(audioUrl, statusMessage = "Recording ready to play"
 }
 
 async function loadMicrophoneDropdown() {
-    if (!micSelect) {
-        return;
-    }
+    if (!micSelect) return;
 
     try {
-        // Ask once so device labels become available in Electron.
         const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         permissionStream.getTracks().forEach((track) => track.stop());
 
@@ -145,7 +255,6 @@ async function loadMicrophoneDropdown() {
         const microphones = devices.filter((device) => device.kind === 'audioinput');
 
         micSelect.innerHTML = '';
-
         if (microphones.length === 0) {
             micSelect.innerHTML = '<option>No microphones found</option>';
             micSelect.disabled = true;
@@ -161,30 +270,12 @@ async function loadMicrophoneDropdown() {
         });
     } catch (err) {
         console.error("Failed to load microphones:", err);
-        micSelect.innerHTML = '<option>Failed to load microphones</option>';
         micSelect.disabled = true;
     }
 }
 
-async function hydrateSavedRecording() {
-    try {
-        const result = await window.recorder.getSaved();
-        console.log("Saved recording lookup:", result);
-
-        if (result.success && result.audioUrl) {
-            loadAudioIntoPlayer(result.audioUrl, "Loaded existing recording");
-        }
-    } catch (err) {
-        console.error("Failed to load saved recording:", err);
-    }
-}   
-
 function stopTracks(stream) {
-    if (!stream) {
-        return;
-    }
-
-    stream.getTracks().forEach((track) => track.stop());
+    if (stream) stream.getTracks().forEach((track) => track.stop());
 }
 
 async function createMixedRecorder(selectedMicDeviceId) {
@@ -193,10 +284,7 @@ async function createMixedRecorder(selectedMicDeviceId) {
         : { audio: true, video: false };
 
     const micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
-    const systemStream = await navigator.mediaDevices.getDisplayMedia({
-        audio: true,
-        video: true
-    });
+    const systemStream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
 
     const audioContext = new AudioContext();
     const destination = audioContext.createMediaStreamDestination();
@@ -206,72 +294,26 @@ async function createMixedRecorder(selectedMicDeviceId) {
 
     const systemAudioTracks = systemStream.getAudioTracks();
     if (systemAudioTracks.length > 0) {
-        const systemSource = audioContext.createMediaStreamSource(
-            new MediaStream(systemAudioTracks)
-        );
+        const systemSource = audioContext.createMediaStreamSource(new MediaStream(systemAudioTracks));
         systemSource.connect(destination);
-    } else {
-        console.warn("System loopback stream did not include audio tracks.");
     }
 
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
     const mediaRecorder = new MediaRecorder(destination.stream, { mimeType });
     const chunks = [];
 
     mediaRecorder.addEventListener('dataavailable', (event) => {
-        if (event.data && event.data.size > 0) {
-            chunks.push(event.data);
-        }
+        if (event.data && event.data.size > 0) chunks.push(event.data);
     });
 
     mediaRecorder.start(250);
 
-    return {
-        audioContext,
-        mediaRecorder,
-        micStream,
-        systemStream,
-        chunks
-    };
+    return { audioContext, mediaRecorder, micStream, systemStream, chunks };
 }
 
-audioPlayer.addEventListener('loadstart', () => {
-    console.log('Audio: loadstart event');
-});
-
-audioPlayer.addEventListener('canplay', () => {
-    console.log('Audio: canplay event - Ready to play!');
-});
-
-audioPlayer.addEventListener('error', (e) => {
-    const err = e.target.error;
-    console.error('Audio error:', err);
-    console.error('Audio src:', audioPlayer.src);
-    updateStatus('Audio playback failed: ' + (err?.message || 'unknown error'), 'error');
-});
-
-audioPlayer.addEventListener('loadedmetadata', () => {
-    console.log('Audio metadata loaded');
-    console.log('Audio duration:', audioPlayer.duration);
-    console.log('Audio currentSrc:', audioPlayer.currentSrc);
-});
-
-audioPlayer.addEventListener('canplaythrough', () => {
-    console.log('Audio canplaythrough event - enough data to play!');
-});
-
-audioPlayer.addEventListener('play', () => {
-    console.log('Audio playback started');
-});
-
+// 5. RECORDING LOGIC (START / STOP)
 async function onStart() {
-    if (activeRecording) {
-        showRecordingIndicator("Recording in progress");
-        return;
-    }
+    if (activeRecording) return;
 
     try {
         startBtn.disabled = true;
@@ -279,12 +321,11 @@ async function onStart() {
 
         const selectedMic = micSelect && !micSelect.disabled ? micSelect.value : undefined;
         activeRecording = await createMixedRecorder(selectedMic);
+        
         showRecordingIndicator("Recording in progress");
-
         stopBtn.disabled = false;
         updateStatus("Recording in progress", "recording");
     } catch (err) {
-        console.error("Failed to start recording:", err);
         activeRecording = null;
         hideRecordingIndicator();
         startBtn.disabled = false;
@@ -293,10 +334,7 @@ async function onStart() {
 }
 
 async function onStop() {
-    if (!activeRecording) {
-        updateStatus("Not recording", "error");
-        return;
-    }
+    if (!activeRecording) return;
 
     try {
         stopBtn.disabled = true;
@@ -308,18 +346,8 @@ async function onStop() {
 
         const stoppedBlob = await new Promise((resolve, reject) => {
             recording.mediaRecorder.addEventListener('stop', () => {
-                try {
-                    const blob = new Blob(recording.chunks, { type: recording.mediaRecorder.mimeType });
-                    resolve(blob);
-                } catch (error) {
-                    reject(error);
-                }
+                resolve(new Blob(recording.chunks, { type: recording.mediaRecorder.mimeType }));
             }, { once: true });
-
-            recording.mediaRecorder.addEventListener('error', (event) => {
-                reject(event.error || new Error("MediaRecorder error"));
-            }, { once: true });
-
             recording.mediaRecorder.stop();
         });
 
@@ -327,176 +355,132 @@ async function onStop() {
         stopTracks(recording.systemStream);
         await recording.audioContext.close();
 
-        const bytes = Array.from(new Uint8Array(await stoppedBlob.arrayBuffer()));
         if (!activeMeetingId) {
             updateStatus("Error: Create a New Meeting first!", "error");
             startBtn.disabled = false;
-            return; // Stop the function here so we don't save a broken file
-            }
-        const recordingData = { bytes: bytes, meetingId: activeMeetingId };
-        const result = await window.recorder.saveMixedAudio(recordingData);
-        console.log("Stop result:", result);
+            return; 
+        }
+
+        const bytes = Array.from(new Uint8Array(await stoppedBlob.arrayBuffer()));
+        const result = await window.recorder.saveMixedAudio({ bytes: bytes, meetingId: activeMeetingId });
 
         startBtn.disabled = false;
 
         if (result.success && result.audioUrl) {
-            console.log("Audio URL:", result.audioUrl);
-
-            audioPlayer.onloadedmetadata = () => {
-                console.log('Loaded metadata, duration =', audioPlayer.duration);
-                audioPlayer.play().catch((e) => {
-                    console.error('Audio play rejected:', e);
-                    updateStatus('Audio playback blocked: ' + e.message, 'error');
-                });
-            };
-
-            audioPlayer.onerror = (e) => {
-                console.error('Audio element load failed:', e);
-                console.error('Audio element error details:', audioPlayer.error);
-                updateStatus('Audio load failed: ' + (audioPlayer.error?.message || 'unknown'), 'error');
-            };
-
             loadAudioIntoPlayer(result.audioUrl, "Recording saved - Ready to play");
-            console.log('audioPlayer.currentSrc after load:', audioPlayer.currentSrc);
         } else {
-            console.error("Stop failed:", result.message);
             updateStatus(result.message || "Failed to stop", "error");
         }
     } catch (err) {
-        console.error("Failed to stop recording:", err);
-        if (activeRecording) {
-            showRecordingIndicator("Recording in progress");
-        }
+        hideRecordingIndicator();
         updateStatus("Error: " + err.message, "error");
         startBtn.disabled = false;
     }
 }
 
-// async function onanalyzeBtn() {
-//     try {
-//         updateStatus("Sending Request to server", "analyzing");
-//     } catch (err) {
-//         console.error("Failed to send request to the server", err);
-//         updateStatus("Error: " + err.message, "error");
-//     }
-// }
-
-//for analze button;
+// 6. TRANSCRIPTION LOGIC
 async function onanalyzeBtn() {
-    if (isTranscribing) {
-        updateStatus("Transcription already processing...", "recording");
-        return;
-    }
+    if (isTranscribing) return;
 
     try {
         isTranscribing = true;
         analyzeBtn.classList.add('opacity-70');
-        updateStatus("Running Whisper locally...", "recording");
-
-        // 1. Check for the post-it note!
+        
         if (!activeMeetingId) {
-            updateStatus("Error: No active meeting selected! Start with creating new meeting" , "error");
-            isTranscribing = false;
+            updateStatus("Error: No active meeting selected!", "error");
             return;
         }
 
-        // 2. Hand the post-it note to the Receptionist!
+        updateStatus("Running Whisper locally...", "recording");
         await window.recorder.transcribeLocal(activeMeetingId);
         const transcript = await window.recorder.getTranscriptFile(activeMeetingId);
 
         const outputDiv = document.getElementById('transcript-output');
         outputDiv.classList.remove('hidden');
 
-        // Making output look better by adding each line with a timestamp and on a new line
         const lines = transcript.split('\n').filter(line => line.trim() !== '');
-        const formatted = lines.map(line => {
+        outputDiv.innerHTML = lines.map(line => {
             const parts = line.split(' ');
-            const time = parts.shift(); // first word = time
-            const text = parts.join(' ');
-            return `<div>
-            <span class="text-blue-300 font-medium">${time} </span> ${text}
-            </div>`;
+            const time = parts.shift();
+            return `<div><span class="text-blue-300 font-medium">${time} </span> ${parts.join(' ')}</div>`;
         }).join('');
         
-        outputDiv.innerHTML = formatted;
         updateStatus("Transcription complete", "idle");
-
     } catch (err) {
-        console.error("Transcription failed:", err);
         updateStatus("Error: " + err.message, "error");
     } finally {
         isTranscribing = false;
         analyzeBtn.classList.remove('opacity-70');
-        analyzeBtn.textContent = 'Analyze';
     }
 }
 
+// 7. SUMMARY LOGIC
 function formatSummary(rawText) {
     let html = rawText
-        .replace(/Overview:/g, '<h4 class="text-lg font-bold mt-6 mb-2 text-blue-600">Overview</h4>')
-        .replace(/Key Notes:/g, '<h4 class="text-lg font-bold mt-6 mb-2 text-blue-600">Key Notes</h4>')
-        .replace(/Action Items:/g, '<h4 class="text-lg font-bold mt-6 mb-2 text-blue-600">Action Items</h4>');
+        // Add text-left to the H1
+        .replace(/Title:\s*(.*)/g, '<h1 class="text-3xl font-extrabold text-[#37352f] leading-tight tracking-tight text-left">$1</h1>')
+        
+        // Add text-left to the section headers
+        .replace(/Overview:/g, '<h3 class="text-xl font-bold text-[#37352f] mt-2 mb-1 text-left">Overview</h3>')
+        .replace(/Key Notes:/g, '<h3 class="text-xl font-bold text-[#37352f] mt-2 mb-1 text-left">Key Notes</h3>')
+        .replace(/Action Items:/g, '<h3 class="text-xl font-bold text-[#37352f] mt-2 mb-1 text-left">Action Items</h3>');
 
-    // Turn dashes into HTML bullet points
-    html = html.replace(/-\s(.*)/g, '<li class="ml-5 list-disc mb-1">$1</li>');
+    // Add text-left to the bullet points
+    html = html.replace(/-\s(.*)/g, '<li class="ml-6 list-disc text-[#37352f] mb-2 leading-relaxed text-left">$1</li>');
 
     return html;
 }
 
-// 2. The Updated Summary Function
 async function onGenerateSummary() {
-  if (isSummarizing) {
-    updateStatus("Summary already processing...", "recording");
-    return;
-  }
+  if (isSummarizing) return;
 
   try {
     isSummarizing = true;
     summaryBtn.classList.add("opacity-70");
     const provider = document.getElementById("summary-provider")?.value || "api";
     const model = document.getElementById("ollama-model")?.value || "llama3.1:8b";
-    const providerName = provider === "ollama" ? "Ollama" : "API";
-
+    
     if (!activeMeetingId) {
-        updateStatus("Error: No active meeting selected! Start with creating new meeting", "error");
-        isSummarizing = false;
+        updateStatus("Error: No active meeting selected!", "error");
         return;
     }
 
-    updateStatus(`${providerName} working...`, "recording");
-
-    const requestBox = { 
-        provider: provider, 
-        model: model, 
-        meetingId: activeMeetingId 
-    };
+    updateStatus(`${provider === "ollama" ? "Ollama" : "API"} working...`, "recording");
 
     // Ask the Receptionist for the summary
-    const summary = await window.recorder.generateSummary(requestBox);
+    const summary = await window.recorder.generateSummary({ 
+        provider, model, meetingId: activeMeetingId 
+    });
 
-    // --- THIS IS THE PART YOU WERE MISSING --- //
-    // Grab the UI boxes from your screen
+    const titleMatch = summary.match(/Title:\s*(.*)/);
+    
+    if (titleMatch && titleMatch[1]) {
+        const newTitle = titleMatch[1].trim(); 
+        
+        await window.recorder.renameMeeting({ meetingId: activeMeetingId, newTitle: newTitle });
+        
+        loadSidebar(); 
+
+        if (typeof meetingTitle !== 'undefined' && meetingTitle) {
+             meetingTitle.textContent = newTitle;
+        }
+    }
+
+    // Grab the UI boxes
     const outputBox = document.getElementById("summary-output");
     const summaryText = document.getElementById("summary-paragraph"); 
     const summaryPlaceholder = document.getElementById("summary-placeholder");
-    const summaryTitle = document.getElementById("summary-title");
 
-    // Make the box visible and hide the placeholder
+    // Show the box, hide the placeholder
     outputBox.classList.remove("hidden");
     if(summaryPlaceholder) summaryPlaceholder.classList.add("hidden");
 
-    // Add the dynamic title
-    if(summaryTitle) {
-        summaryTitle.textContent = `Summary for ${activeMeetingId}`;
-    }
-
-    // Pass the raw text through our beautifier and put it on the screen!
+    // Format the text (this will turn the "Title:" into an H1!)
     summaryText.innerHTML = formatSummary(summary);
     
-    updateStatus(`${providerName} summary ready`, "idle");
+    updateStatus(`Summary ready`, "idle");
 
   } catch (err) {
-    console.error(err);
     updateStatus("Summary failed: " + err.message, "error");
   } finally {
     isSummarizing = false;
@@ -504,35 +488,19 @@ async function onGenerateSummary() {
   }
 }
 
-// async function onGenerateSummary() {
-//   try {
-//     const summary = await window.recorder.generateSummary();
-
-//     const outputBox = document.getElementById("summary-output");
-//     const summaryText = document.getElementById("summary-paragraph");
-
-//     outputBox.classList.remove("hidden");
-//     summaryText.textContent = summary;
-//   } catch (err) {
-//     console.error(err);
-//   }
-// }
-// Inside renderer/app.js
-testBtn.addEventListener('click', async () => {
-    console.log("Asking the Receptionist for a new meeting...");
-    const meetingDetails = await window.recorder.createMeeting(); 
-    
-    // THE NEW MAGIC LINE: Write the ID onto our post-it note!
-    activeMeetingId = meetingDetails.id; 
-    
-    console.log("The currently open folder on the desk is now:", activeMeetingId);
-});
 
 
-startBtn.addEventListener("click", onStart);
-stopBtn.addEventListener("click", onStop);
-analyzeBtn.addEventListener("click", onanalyzeBtn);
-summaryBtn.addEventListener("click", onGenerateSummary);
+// 8. APP INITIALIZATION (EVENT LISTENERS)
+if (newMeetingBtn) newMeetingBtn.addEventListener('click', handleNewMeetingClick);
+if (startBtn) startBtn.addEventListener("click", onStart);
+if (stopBtn) stopBtn.addEventListener("click", onStop);
+if (analyzeBtn) analyzeBtn.addEventListener("click", onanalyzeBtn);
+if (summaryBtn) summaryBtn.addEventListener("click", onGenerateSummary);
+
+// Audio error handling listeners
+audioPlayer.addEventListener('error', (e) => updateStatus('Audio playback failed', 'error'));
+
+// Boot up the UI!
+loadSidebar();
 loadMicrophoneDropdown();
-hydrateSavedRecording();
-console.log("Renderer loaded and ready");
+console.log("MindMic UI loaded and ready!");

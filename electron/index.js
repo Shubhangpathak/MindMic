@@ -5,7 +5,7 @@ const { exec, spawn } = require("child_process");
 const { pathToFileURL } = require('url');
 const { OUTPUT_FILE } = require("../sound-recorder/record");
 const { getMeetingsDir } = require('../services/storage');
-const { createMeeting } = require('../services/meetings.js');
+const { createMeeting, listMeetings, renameMeeting } = require('../services/meetings.js');
 
 const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -359,10 +359,49 @@ ipcMain.handle("summary:generate", async (event, options) => {
     }
 });
 
+ipcMain.handle('meeting:getDetails', async (event, meetingId) => {
+    const folderPath = path.join(getMeetingsDir(), meetingId);
+    const details = {
+        audioUrl: null,
+        transcript: null,
+        summary: null
+    };
+    const audioPath = path.join(folderPath, 'audio.webm');
+    if (fs.existsSync(audioPath)) {
+        details.audioUrl = `file://${audioPath}`;
+    }
+
+    const transcriptPath = path.join(folderPath, 'transcript.txt');
+    if (fs.existsSync(transcriptPath)) {
+        details.transcript = fs.readFileSync(transcriptPath, 'utf-8');
+    }
+
+    const summaryPath = path.join(folderPath, 'summary.json');
+    if (fs.existsSync(summaryPath)) {
+        const rawSummary = fs.readFileSync(summaryPath, 'utf-8');
+        try {
+            const parsedSummary = JSON.parse(rawSummary);
+            details.summary = parsedSummary.text;
+        } catch(e) {
+            console.error("Failed to parse summary.json");
+        }
+    }
+
+    return details;
+});
+
 ipcMain.handle('meeting:create', () => {
     return createMeeting();
 });
 
+ipcMain.handle('meeting:list', () => {
+    return listMeetings();
+});
+
+ipcMain.handle('meeting:rename', (event, data) => {
+    renameMeeting(data.meetingId, data.newTitle);
+    return true;
+});
 
 app.whenReady().then(() => {
 const myDrawer = getMeetingsDir();

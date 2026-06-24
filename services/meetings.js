@@ -40,4 +40,26 @@ function createMeeting(){
 
 }
 
-module.exports = { createMeeting }
+function listMeetings(){
+    const clipboardPath = path.join(getMeetingsDir(), 'meetings.json');
+    const clipboard = readJSON(clipboardPath);
+
+    return clipboard ? clipboard.meetings : [];
+
+}
+
+function renameMeeting(meetingId, newTitle) {
+    const clipboardPath = path.join(getMeetingsDir(), 'meetings.json');
+    let clipboard = readJSON(clipboardPath);
+    if (!clipboard) return;
+
+    // Find the exact meeting and update its title
+    const meeting = clipboard.meetings.find(m => m.id === meetingId);
+    if (meeting) {
+        meeting.title = newTitle;
+        writeJSON(clipboardPath, clipboard); // Save it permanently!
+        console.log(`MANAGER: Renamed ${meetingId} to "${newTitle}"`);
+    }
+}
+
+module.exports = { createMeeting, listMeetings, renameMeeting}

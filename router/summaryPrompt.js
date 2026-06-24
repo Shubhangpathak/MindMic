@@ -4,6 +4,8 @@ function buildSummaryPrompt(transcript) {
 Return ONLY the summary in the exact format below. Do not add warnings, apologies, prefaces, markdown fences, or the full transcript.
 
 Format:
+Title: [Provide a short, 3 to 6 word descriptive title for this meeting]
+
 Overview:
 - 2 to 4 concise bullets describing the main discussion.
 
