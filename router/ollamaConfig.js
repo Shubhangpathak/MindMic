@@ -1,16 +1,18 @@
 const fs = require("fs");
 const path = require("path");
 const { buildSummaryPrompt } = require("./summaryPrompt");
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 async function askOllama(prompt){
     try{
-        const response = await fetch('http://localhost:11434/api/generate',{
+        const baseUrl = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+        const response = await fetch(`${baseUrl}/api/generate`,{
             method: 'POST',
             headers:{
                 "Content-Type": "application/json"
             },
             body:JSON.stringify({
-                model: "gemma3:4b",
+                model: process.env.OLLAMA_MODEL || "gemma3:4b",
                 prompt,
                 stream: false,
             })

@@ -8,6 +8,16 @@ const summaryBtn = document.getElementById("summaryBtn");
 const toastRegion = document.getElementById('toast-region');
 const newMeetingBtn = document.getElementById('new-meeting-btn');
 const sidebarList = document.getElementById('sidebar-list');
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const settingsCloseBtn = document.getElementById('settings-close-btn');
+const settingsCancelBtn = document.getElementById('settings-cancel-btn');
+const settingsSaveBtn = document.getElementById('settings-save-btn');
+const settingsMicSelect = document.getElementById('settings-mic-select');
+const settingsModeSelect = document.getElementById('settings-mode-select');
+const settingsSummaryProvider = document.getElementById('settings-summary-provider');
+const ollamaUrlInput = document.getElementById('ollama-url-input');
+const appShell = document.querySelector('.app-shell');
 const emptyStateOverlay = document.getElementById('empty-state-overlay');
 const meetingTitle = document.getElementById('meeting-title');
 // const outputBox = document.getElementById("summary-output");
@@ -18,6 +28,81 @@ let isTranscribing = false;
 let isSummarizing = false;
 let recordingIndicator = null;
 let toastId = 0;
+let cachedSettings = {
+    ollamaBaseUrl: 'http://localhost:11434'
+};
+
+function setSettingsOpen(isOpen) {
+    if (settingsModal) {
+        settingsModal.classList.toggle('hidden', !isOpen);
+        settingsModal.classList.toggle('flex', isOpen);
+        settingsModal.setAttribute('aria-hidden', String(!isOpen));
+    }
+
+    if (appShell) {
+        appShell.classList.toggle('blur-sm', isOpen);
+        appShell.classList.toggle('pointer-events-none', isOpen);
+    }
+}
+
+function syncSettingsModalValues() {
+    if (settingsMicSelect && micSelect) {
+        settingsMicSelect.value = micSelect.value;
+    }
+
+    if (settingsModeSelect) {
+        settingsModeSelect.value = document.getElementById('mode-select')?.value || 'local';
+    }
+
+    if (settingsSummaryProvider) {
+        settingsSummaryProvider.value = document.getElementById('summary-provider')?.value || 'ollama';
+    }
+
+    if (ollamaUrlInput) {
+        ollamaUrlInput.value = cachedSettings.ollamaBaseUrl || 'http://localhost:11434';
+    }
+}
+
+function syncMainControlsFromModal() {
+    const modeSelect = document.getElementById('mode-select');
+    const summaryProvider = document.getElementById('summary-provider');
+
+    if (micSelect && settingsMicSelect) {
+        micSelect.value = settingsMicSelect.value;
+    }
+
+    if (modeSelect && settingsModeSelect) {
+        modeSelect.value = settingsModeSelect.value;
+    }
+
+    if (summaryProvider && settingsSummaryProvider) {
+        summaryProvider.value = settingsSummaryProvider.value;
+    }
+}
+
+async function loadSettings() {
+    if (!window.recorder?.getSettings) return;
+
+    try {
+        cachedSettings = await window.recorder.getSettings();
+        if (ollamaUrlInput) {
+            ollamaUrlInput.value = cachedSettings.ollamaBaseUrl || 'http://localhost:11434';
+        }
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+    }
+}
+
+async function saveSettings() {
+    const ollamaBaseUrl = ollamaUrlInput?.value?.trim() || 'http://localhost:11434';
+    syncMainControlsFromModal();
+
+    if (window.recorder?.saveSettings) {
+        cachedSettings = await window.recorder.saveSettings({ ollamaBaseUrl });
+    } else {
+        cachedSettings = { ...cachedSettings, ollamaBaseUrl };
+    }
+}
 
 // 2. UI TOASTS & NOTIFICATIONS (The popup messages)
 const toastTypeStyles = {
@@ -254,23 +339,31 @@ async function loadMicrophoneDropdown() {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const microphones = devices.filter((device) => device.kind === 'audioinput');
 
-        micSelect.innerHTML = '';
-        if (microphones.length === 0) {
-            micSelect.innerHTML = '<option>No microphones found</option>';
-            micSelect.disabled = true;
-            return;
-        }
+        const populateSelect = (selectEl) => {
+            if (!selectEl) return;
 
-        micSelect.disabled = false;
-        microphones.forEach((mic, index) => {
-            const option = document.createElement('option');
-            option.value = mic.deviceId;
-            option.textContent = mic.label || `Microphone ${index + 1}`;
-            micSelect.appendChild(option);
-        });
+            selectEl.innerHTML = '';
+            if (microphones.length === 0) {
+                selectEl.innerHTML = '<option>No microphones found</option>';
+                selectEl.disabled = true;
+                return;
+            }
+
+            selectEl.disabled = false;
+            microphones.forEach((mic, index) => {
+                const option = document.createElement('option');
+                option.value = mic.deviceId;
+                option.textContent = mic.label || `Microphone ${index + 1}`;
+                selectEl.appendChild(option);
+            });
+        };
+
+        populateSelect(micSelect);
+        populateSelect(settingsMicSelect);
     } catch (err) {
         console.error("Failed to load microphones:", err);
         micSelect.disabled = true;
+        if (settingsMicSelect) settingsMicSelect.disabled = true;
     }
 }
 
@@ -496,6 +589,28 @@ if (startBtn) startBtn.addEventListener("click", onStart);
 if (stopBtn) stopBtn.addEventListener("click", onStop);
 if (analyzeBtn) analyzeBtn.addEventListener("click", onanalyzeBtn);
 if (summaryBtn) summaryBtn.addEventListener("click", onGenerateSummary);
+if (settingsBtn) settingsBtn.addEventListener('click', () => {
+    syncSettingsModalValues();
+    setSettingsOpen(true);
+});
+if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', () => setSettingsOpen(false));
+if (settingsCancelBtn) settingsCancelBtn.addEventListener('click', () => setSettingsOpen(false));
+if (settingsModal) {
+    settingsModal.addEventListener('click', (event) => {
+        if (event.target === settingsModal) setSettingsOpen(false);
+    });
+}
+if (settingsSaveBtn) {
+    settingsSaveBtn.addEventListener('click', async () => {
+        try {
+            await saveSettings();
+            setSettingsOpen(false);
+            updateStatus('Settings saved', 'idle');
+        } catch (error) {
+            updateStatus(`Settings failed: ${error.message}`, 'error');
+        }
+    });
+}
 
 // Audio error handling listeners
 audioPlayer.addEventListener('error', (e) => updateStatus('Audio playback failed', 'error'));
@@ -503,4 +618,5 @@ audioPlayer.addEventListener('error', (e) => updateStatus('Audio playback failed
 // Boot up the UI!
 loadSidebar();
 loadMicrophoneDropdown();
+loadSettings();
 console.log("MindMic UI loaded and ready!");

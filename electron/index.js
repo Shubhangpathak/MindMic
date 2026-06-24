@@ -9,6 +9,9 @@ const { createMeeting, listMeetings, renameMeeting } = require('../services/meet
 
 const TEMP_RECORDING_FILE = path.resolve(__dirname, "output.webm");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
+const ENV_FILE_PATH = path.join(PROJECT_ROOT, '.env');
+
+require('dotenv').config({ path: ENV_FILE_PATH });
 
 const { generateSummary } = require("../router/apiConfig");
 const { summarizeTranscript } = require("../router/ollamaConfig");
@@ -111,6 +114,32 @@ function createProcessStartError(command, error) {
     return new Error(`Unable to start ${command}: ${error.message}`);
 }
 
+function getRuntimeSettings() {
+    return {
+        ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+        ollamaModel: process.env.OLLAMA_MODEL || 'mistral',
+        preferredAgent: process.env.PREFERRED_AGENT || 'ollama-local'
+    };
+}
+
+function upsertEnvValue(key, value) {
+    const normalizedValue = String(value).replace(/\r?\n/g, '').trim();
+    const linePattern = new RegExp(`^${key}=.*$`, 'm');
+    let envContent = fs.existsSync(ENV_FILE_PATH) ? fs.readFileSync(ENV_FILE_PATH, 'utf-8') : '';
+
+    if (linePattern.test(envContent)) {
+        envContent = envContent.replace(linePattern, `${key}=${normalizedValue}`);
+    } else {
+        if (envContent && !envContent.endsWith('\n')) {
+            envContent += '\n';
+        }
+        envContent += `${key}=${normalizedValue}\n`;
+    }
+
+    fs.writeFileSync(ENV_FILE_PATH, envContent);
+    process.env[key] = normalizedValue;
+}
+
 function convertWebmToWav() {
     return new Promise((resolve, reject) => {
         const ffmpeg = spawn(
@@ -158,6 +187,18 @@ ipcMain.handle("getMicrophones", async () => {
             resolve(`${stdout || ""}\n${stderr || ""}`);
         });
     });
+});
+
+ipcMain.handle('settings:get', async () => {
+    return getRuntimeSettings();
+});
+
+ipcMain.handle('settings:set', async (event, settings) => {
+    if (settings?.ollamaBaseUrl) {
+        upsertEnvValue('OLLAMA_BASE_URL', settings.ollamaBaseUrl);
+    }
+
+    return getRuntimeSettings();
 });
 
 // ipcMain.handle("record:saveMixedAudio", async (event, byteArray) => {

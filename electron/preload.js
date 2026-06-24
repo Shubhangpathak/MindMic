@@ -5,6 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('recorder', {
     getSaved: () => ipcRenderer.invoke('record:getSaved'),
     getMicrophones: () => ipcRenderer.invoke('getMicrophones'),
+    getSettings: () => ipcRenderer.invoke('settings:get'),
+    saveSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
     saveMixedAudio: (byteArray) => ipcRenderer.invoke('record:saveMixedAudio', byteArray),
     // transcribeLocal: () => ipcRenderer.invoke('transcribe:local'),
     transcribeLocal: (meetingId) => ipcRenderer.invoke('transcribe:local', meetingId),
