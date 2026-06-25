@@ -70,4 +70,6 @@ pip install faster-whisper
 ---
 **Screenshort**
 ![Application Screenshot](image/image.png)
+New Build Preview:
+![Application Screenshot](image/image_2.png)
 <!-- Feedback: [click here to open](https://forms.gle/MoV2Bv6R79dRDKvGA) -->
